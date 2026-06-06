@@ -1,0 +1,34 @@
+[package]
+name = "Dendrite-WM"
+version = "0.1.0"
+edition = "2024"
+authors = ["Heman Gandhi <hemangandhi+dendrite@gmail.com>"]
+description = "The Dendrite Wayland compositor built with Smithay"
+
+[dependencies]
+# The core library for building compositors.
+# We enable 'backend_winit' to run nested inside an existing window manager,
+# and 'renderer_gles2' to handle standard hardware-accelerated drawing.
+smithay = { version = "0.7.0", features = [ "backend_winit", "wayland_frontend", "desktop", "renderer_gl" ] }
+
+# Low-level Wayland server bindings that map protocol files into Rust code.
+wayland-server = "0.31"
+
+# The OS event loop library used by Smithay to poll file descriptors and timers.
+calloop = "0.12"
+
+# Structured, asynchronous logging utilities (essential for tracking client protocols).
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+bitflags = "2.2.1"
+
+[profile.dev]
+# Wayland compositors are performance-sensitive, even in debug mode.
+# Setting opt-level to 1 keeps compilation fast but prevents frame stuttering.
+opt-level = 1
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
