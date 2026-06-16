@@ -11,10 +11,10 @@ use smithay::reexports::{
     calloop::EventLoop,
     wayland_server::{Display, DisplayHandle},
 };
-pub use state::Smallvil;
+pub use state::DendriteState;
 
 pub struct CalloopData {
-    state: Smallvil,
+    state: DendriteState,
     display_handle: DisplayHandle,
 }
 
@@ -27,9 +27,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut event_loop: EventLoop<CalloopData> = EventLoop::try_new()?;
 
-    let display: Display<Smallvil> = Display::new()?;
+    let display: Display<DendriteState> = Display::new()?;
     let display_handle = display.handle();
-    let state = Smallvil::new(&mut event_loop, display);
+    let state = DendriteState::new(&mut event_loop, display);
 
     let mut data = CalloopData {
         state,
@@ -52,7 +52,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     event_loop.run(None, &mut data, move |_| {
-        // Smallvil is running
+        // Dendrite is running
     })?;
 
     Ok(())

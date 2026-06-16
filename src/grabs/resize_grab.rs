@@ -1,4 +1,4 @@
-use crate::Smallvil;
+use crate::DendriteState;
 use smithay::{
     desktop::{Space, Window},
     input::pointer::{
@@ -40,7 +40,7 @@ impl From<xdg_toplevel::ResizeEdge> for ResizeEdge {
 }
 
 pub struct ResizeSurfaceGrab {
-    start_data: PointerGrabStartData<Smallvil>,
+    start_data: PointerGrabStartData<DendriteState>,
     window: Window,
 
     edges: ResizeEdge,
@@ -51,7 +51,7 @@ pub struct ResizeSurfaceGrab {
 
 impl ResizeSurfaceGrab {
     pub fn start(
-        start_data: PointerGrabStartData<Smallvil>,
+        start_data: PointerGrabStartData<DendriteState>,
         window: Window,
         edges: ResizeEdge,
         initial_window_rect: Rectangle<i32, Logical>,
@@ -75,11 +75,11 @@ impl ResizeSurfaceGrab {
     }
 }
 
-impl PointerGrab<Smallvil> for ResizeSurfaceGrab {
+impl PointerGrab<DendriteState> for ResizeSurfaceGrab {
     fn motion(
         &mut self,
-        data: &mut Smallvil,
-        handle: &mut PointerInnerHandle<'_, Smallvil>,
+        data: &mut DendriteState,
+        handle: &mut PointerInnerHandle<'_, DendriteState>,
         _focus: Option<(WlSurface, Point<f64, Logical>)>,
         event: &MotionEvent,
     ) {
@@ -144,8 +144,8 @@ impl PointerGrab<Smallvil> for ResizeSurfaceGrab {
 
     fn relative_motion(
         &mut self,
-        data: &mut Smallvil,
-        handle: &mut PointerInnerHandle<'_, Smallvil>,
+        data: &mut DendriteState,
+        handle: &mut PointerInnerHandle<'_, DendriteState>,
         focus: Option<(WlSurface, Point<f64, Logical>)>,
         event: &RelativeMotionEvent,
     ) {
@@ -154,8 +154,8 @@ impl PointerGrab<Smallvil> for ResizeSurfaceGrab {
 
     fn button(
         &mut self,
-        data: &mut Smallvil,
-        handle: &mut PointerInnerHandle<'_, Smallvil>,
+        data: &mut DendriteState,
+        handle: &mut PointerInnerHandle<'_, DendriteState>,
         event: &ButtonEvent,
     ) {
         handle.button(data, event);
@@ -187,21 +187,25 @@ impl PointerGrab<Smallvil> for ResizeSurfaceGrab {
 
     fn axis(
         &mut self,
-        data: &mut Smallvil,
-        handle: &mut PointerInnerHandle<'_, Smallvil>,
+        data: &mut DendriteState,
+        handle: &mut PointerInnerHandle<'_, DendriteState>,
         details: AxisFrame,
     ) {
         handle.axis(data, details)
     }
 
-    fn frame(&mut self, data: &mut Smallvil, handle: &mut PointerInnerHandle<'_, Smallvil>) {
+    fn frame(
+        &mut self,
+        data: &mut DendriteState,
+        handle: &mut PointerInnerHandle<'_, DendriteState>,
+    ) {
         handle.frame(data);
     }
 
     fn gesture_swipe_begin(
         &mut self,
-        data: &mut Smallvil,
-        handle: &mut PointerInnerHandle<'_, Smallvil>,
+        data: &mut DendriteState,
+        handle: &mut PointerInnerHandle<'_, DendriteState>,
         event: &GestureSwipeBeginEvent,
     ) {
         handle.gesture_swipe_begin(data, event)
@@ -209,8 +213,8 @@ impl PointerGrab<Smallvil> for ResizeSurfaceGrab {
 
     fn gesture_swipe_update(
         &mut self,
-        data: &mut Smallvil,
-        handle: &mut PointerInnerHandle<'_, Smallvil>,
+        data: &mut DendriteState,
+        handle: &mut PointerInnerHandle<'_, DendriteState>,
         event: &GestureSwipeUpdateEvent,
     ) {
         handle.gesture_swipe_update(data, event)
@@ -218,8 +222,8 @@ impl PointerGrab<Smallvil> for ResizeSurfaceGrab {
 
     fn gesture_swipe_end(
         &mut self,
-        data: &mut Smallvil,
-        handle: &mut PointerInnerHandle<'_, Smallvil>,
+        data: &mut DendriteState,
+        handle: &mut PointerInnerHandle<'_, DendriteState>,
         event: &GestureSwipeEndEvent,
     ) {
         handle.gesture_swipe_end(data, event)
@@ -227,8 +231,8 @@ impl PointerGrab<Smallvil> for ResizeSurfaceGrab {
 
     fn gesture_pinch_begin(
         &mut self,
-        data: &mut Smallvil,
-        handle: &mut PointerInnerHandle<'_, Smallvil>,
+        data: &mut DendriteState,
+        handle: &mut PointerInnerHandle<'_, DendriteState>,
         event: &GesturePinchBeginEvent,
     ) {
         handle.gesture_pinch_begin(data, event)
@@ -236,8 +240,8 @@ impl PointerGrab<Smallvil> for ResizeSurfaceGrab {
 
     fn gesture_pinch_update(
         &mut self,
-        data: &mut Smallvil,
-        handle: &mut PointerInnerHandle<'_, Smallvil>,
+        data: &mut DendriteState,
+        handle: &mut PointerInnerHandle<'_, DendriteState>,
         event: &GesturePinchUpdateEvent,
     ) {
         handle.gesture_pinch_update(data, event)
@@ -245,8 +249,8 @@ impl PointerGrab<Smallvil> for ResizeSurfaceGrab {
 
     fn gesture_pinch_end(
         &mut self,
-        data: &mut Smallvil,
-        handle: &mut PointerInnerHandle<'_, Smallvil>,
+        data: &mut DendriteState,
+        handle: &mut PointerInnerHandle<'_, DendriteState>,
         event: &GesturePinchEndEvent,
     ) {
         handle.gesture_pinch_end(data, event)
@@ -254,8 +258,8 @@ impl PointerGrab<Smallvil> for ResizeSurfaceGrab {
 
     fn gesture_hold_begin(
         &mut self,
-        data: &mut Smallvil,
-        handle: &mut PointerInnerHandle<'_, Smallvil>,
+        data: &mut DendriteState,
+        handle: &mut PointerInnerHandle<'_, DendriteState>,
         event: &GestureHoldBeginEvent,
     ) {
         handle.gesture_hold_begin(data, event)
@@ -263,18 +267,18 @@ impl PointerGrab<Smallvil> for ResizeSurfaceGrab {
 
     fn gesture_hold_end(
         &mut self,
-        data: &mut Smallvil,
-        handle: &mut PointerInnerHandle<'_, Smallvil>,
+        data: &mut DendriteState,
+        handle: &mut PointerInnerHandle<'_, DendriteState>,
         event: &GestureHoldEndEvent,
     ) {
         handle.gesture_hold_end(data, event)
     }
 
-    fn start_data(&self) -> &PointerGrabStartData<Smallvil> {
+    fn start_data(&self) -> &PointerGrabStartData<DendriteState> {
         &self.start_data
     }
 
-    fn unset(&mut self, _data: &mut Smallvil) {}
+    fn unset(&mut self, _data: &mut DendriteState) {}
 }
 
 /// State of the resize operation.

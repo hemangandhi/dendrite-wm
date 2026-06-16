@@ -1,7 +1,7 @@
 mod compositor;
 mod xdg_shell;
 
-use crate::Smallvil;
+use crate::DendriteState;
 
 //
 // Wl Seat
@@ -18,12 +18,12 @@ use smithay::wayland::selection::data_device::{
 use smithay::wayland::selection::SelectionHandler;
 use smithay::{delegate_data_device, delegate_output, delegate_seat};
 
-impl SeatHandler for Smallvil {
+impl SeatHandler for DendriteState {
     type KeyboardFocus = WlSurface;
     type PointerFocus = WlSurface;
     type TouchFocus = WlSurface;
 
-    fn seat_state(&mut self) -> &mut SeatState<Smallvil> {
+    fn seat_state(&mut self) -> &mut SeatState<DendriteState> {
         &mut self.seat_state
     }
 
@@ -41,30 +41,30 @@ impl SeatHandler for Smallvil {
     }
 }
 
-delegate_seat!(Smallvil);
+delegate_seat!(DendriteState);
 
 //
 // Wl Data Device
 //
 
-impl SelectionHandler for Smallvil {
+impl SelectionHandler for DendriteState {
     type SelectionUserData = ();
 }
 
-impl DataDeviceHandler for Smallvil {
+impl DataDeviceHandler for DendriteState {
     fn data_device_state(&self) -> &DataDeviceState {
         &self.data_device_state
     }
 }
 
-impl ClientDndGrabHandler for Smallvil {}
-impl ServerDndGrabHandler for Smallvil {}
+impl ClientDndGrabHandler for DendriteState {}
+impl ServerDndGrabHandler for DendriteState {}
 
-delegate_data_device!(Smallvil);
+delegate_data_device!(DendriteState);
 
 //
 // Wl Output & Xdg Output
 //
 
-impl OutputHandler for Smallvil {}
-delegate_output!(Smallvil);
+impl OutputHandler for DendriteState {}
+delegate_output!(DendriteState);
