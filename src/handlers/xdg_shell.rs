@@ -14,7 +14,7 @@ use smithay::{
             Resource,
         },
     },
-    utils::{Rectangle, Serial},
+    utils::{Rectangle, Serial, Size},
     wayland::{
         compositor::with_states,
         shell::xdg::{
@@ -35,8 +35,19 @@ impl XdgShellHandler for DendriteState {
     }
 
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
-        let window = Window::new_wayland_window(surface);
-        self.space.map_element(window, (0, 0), false);
+        if let Some(Size { w, h, .. }) = self
+            .space
+            .outputs()
+            .next()
+            .and_then(|o| self.space.output_geometry(o))
+            .map(|g| g.size)
+        {
+            surface.with_pending_state(|p| p.bounds = Some(Size::new(w, h / 10)));
+            surface.send_pending_configure();
+        }
+        self.layout.push(Window::new_wayland_window(surface));
+        self.active_pointer = Some(0);
+        self.dirty = true;
     }
 
     fn new_popup(&mut self, surface: PopupSurface, _positioner: PositionerState) {

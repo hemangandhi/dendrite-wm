@@ -21,6 +21,7 @@ calloop = "0.12"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 bitflags = "2.2.1"
+libc = "0.2.185"
 
 [profile.dev]
 # Wayland compositors are performance-sensitive, even in debug mode.

@@ -8,6 +8,7 @@ version = "0.1.0"
 dependencies = [
  "bitflags 2.13.0",
  "calloop 0.12.4",
+ "libc",
  "smithay",
  "tracing",
  "tracing-subscriber",

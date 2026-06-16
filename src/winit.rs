@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use smithay::wayland::seat::WaylandFocus;
 use smithay::{
     backend::{
         renderer::{
@@ -10,7 +11,7 @@ use smithay::{
     },
     output::{Mode, Output, PhysicalProperties, Subpixel},
     reexports::calloop::EventLoop,
-    utils::{Rectangle, Transform},
+    utils::{Rectangle, Transform, SERIAL_COUNTER},
 };
 
 use crate::{CalloopData, DendriteState};
@@ -77,6 +78,23 @@ pub fn init_winit(
                 WinitEvent::Redraw => {
                     let size = backend.window_size();
                     let damage = Rectangle::from_size(size);
+
+                    if state.dirty {
+                        state.dirty = false;
+                        for (i, elt) in state.layout.iter().cloned().enumerate() {
+                            let is_active = state.active_pointer.map(|p| p == i).unwrap_or(false);
+                            elt.set_activated(is_active);
+                            state
+                                .space
+                                .map_element(elt, (0, (i as i32) * 100), is_active);
+                        }
+                        if let Some(kbd) = state.seat.get_keyboard() {
+                            let surface = state.layout[state.active_pointer.unwrap()]
+                                .wl_surface()
+                                .map(|s| s.into_owned());
+                            kbd.set_focus(state, surface, SERIAL_COUNTER.next_serial());
+                        }
+                    }
 
                     {
                         let (renderer, mut framebuffer) = backend.bind().unwrap();

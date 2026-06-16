@@ -1,14 +1,21 @@
+use std::ffi::OsStr;
+use std::io::Error;
+use std::os::unix::process::CommandExt;
+use std::process::{Child, Command, Stdio};
+use std::thread;
+
 use smithay::{
     backend::input::{
         AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, InputEvent,
-        KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent,
+        KeyState, KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent,
     },
     input::{
-        keyboard::FilterResult,
+        keyboard::{FilterResult, Keysym},
         pointer::{AxisFrame, ButtonEvent, MotionEvent},
     },
     reexports::wayland_server::protocol::wl_surface::WlSurface,
     utils::SERIAL_COUNTER,
+    wayland::xdg_activation::XdgActivationToken,
 };
 
 use crate::state::DendriteState;
@@ -26,7 +33,60 @@ impl DendriteState {
                     event.state(),
                     serial,
                     time,
-                    |_, _, _| FilterResult::Forward,
+                    |this, mods, keysym| {
+                        let pressed = event.state() == KeyState::Pressed;
+                        if !pressed || !mods.alt {
+                            return FilterResult::Forward;
+                        }
+
+                        match keysym.raw_latin_sym_or_raw_current_sym() {
+                            Some(Keysym::space) => {
+                                let (token, _) =
+                                    this.xdg_activation_state.create_external_token(None);
+                                spawn_sync("contour", Some(token.clone()));
+
+                                return FilterResult::Intercept(());
+                            }
+                            Some(Keysym::q) => {
+                                let Some((idx, tl)) = this.active_pointer.and_then(|idx| {
+                                    this.layout[idx].toplevel().map(|tl| (idx, tl))
+                                }) else {
+                                    return FilterResult::Intercept(());
+                                };
+                                tl.send_close();
+                                this.layout.remove(idx);
+                                this.dirty = true;
+                                if idx >= this.layout.len() {
+                                    this.active_pointer = if this.layout.is_empty() {
+                                        None
+                                    } else {
+                                        Some(0)
+                                    };
+                                }
+                                return FilterResult::Intercept(());
+                            }
+                            Some(Keysym::k) => {
+                                this.active_pointer = match this.active_pointer {
+                                    Some(i) if i < this.layout.len() - 1 => Some(i + 1),
+                                    Some(i) => Some(i),
+                                    None if this.layout.is_empty() => None,
+                                    None => Some(0),
+                                };
+                                this.dirty = true;
+                                return FilterResult::Intercept(());
+                            }
+                            Some(Keysym::j) => {
+                                this.active_pointer = match this.active_pointer {
+                                    Some(i) if i > 0 => Some(i - 1),
+                                    None if !this.layout.is_empty() => Some(0),
+                                    x => x,
+                                };
+                                this.dirty = true;
+                                return FilterResult::Intercept(());
+                            }
+                            _ => return FilterResult::Forward,
+                        };
+                    },
                 );
             }
             InputEvent::PointerMotion { .. } => {}
@@ -141,4 +201,73 @@ impl DendriteState {
             _ => {}
         }
     }
+}
+
+fn spawn_sync<T: AsRef<OsStr> + Send + 'static>(command: T, token: Option<XdgActivationToken>) {
+    let tracing_span = tracing::info_span!("spawn");
+    let _span_enter = tracing_span.enter();
+
+    let res = thread::Builder::new()
+        .name("Spawn thread".to_owned())
+        .spawn(move || {
+            let mut process = Command::new(command.as_ref());
+            process
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null());
+
+            if let Some(token) = token.as_ref() {
+                process.env("XDG_ACTIVATION_TOKEN", token.as_str());
+                process.env("DESKTOP_STARTUP_ID", token.as_str());
+            }
+
+            let Some(mut child) = do_spawn(command.as_ref(), process) else {
+                return;
+            };
+
+            match child.wait() {
+                Ok(status) => {
+                    if !status.success() {
+                        let command_str = command.as_ref().to_str();
+                        tracing::warn!("Spawn for {command_str:?} failed with status {status:?}");
+                    }
+                }
+                Err(e) => {
+                    let command_str = command.as_ref().to_str();
+                    tracing::warn!("Spawn for {command_str:?} failed.");
+                }
+            }
+        });
+
+    if let Err(e) = res {
+        tracing::warn!("Spawn't {e:?}");
+    }
+}
+
+fn do_spawn(command: &OsStr, mut process: Command) -> Option<Child> {
+    unsafe {
+        // Double-fork to avoid having to waitpid the child.
+        process.pre_exec(move || {
+            match libc::fork() {
+                -1 => return Err(Error::last_os_error()),
+                0 => (),
+                _ => libc::_exit(0),
+            }
+
+            // TODO: fix the rlimit?
+            // restore_nofile_rlimit();
+
+            Ok(())
+        });
+    }
+
+    let child = match process.spawn() {
+        Ok(child) => child,
+        Err(err) => {
+            tracing::warn!("error spawning {command:?}: {err:?}");
+            return None;
+        }
+    };
+
+    Some(child)
 }

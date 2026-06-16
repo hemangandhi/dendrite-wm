@@ -7,6 +7,8 @@ use crate::DendriteState;
 // Wl Seat
 //
 
+use smithay::backend::input::KeyState;
+use smithay::input::keyboard::{keysyms, FilterResult, Keysym};
 use smithay::input::{Seat, SeatHandler, SeatState};
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::reexports::wayland_server::Resource;
@@ -16,7 +18,11 @@ use smithay::wayland::selection::data_device::{
     ServerDndGrabHandler,
 };
 use smithay::wayland::selection::SelectionHandler;
-use smithay::{delegate_data_device, delegate_output, delegate_seat};
+
+use smithay::wayland::xdg_activation::{
+    XdgActivationHandler, XdgActivationState, XdgActivationToken, XdgActivationTokenData,
+};
+use smithay::{delegate_data_device, delegate_output, delegate_seat, delegate_xdg_activation};
 
 impl SeatHandler for DendriteState {
     type KeyboardFocus = WlSurface;
@@ -68,3 +74,20 @@ delegate_data_device!(DendriteState);
 
 impl OutputHandler for DendriteState {}
 delegate_output!(DendriteState);
+
+// Activation
+impl XdgActivationHandler for DendriteState {
+    fn activation_state(&mut self) -> &mut XdgActivationState {
+        &mut self.xdg_activation_state
+    }
+
+    fn request_activation(
+        &mut self,
+        token: XdgActivationToken,
+        token_data: XdgActivationTokenData,
+        surface: WlSurface,
+    ) {
+        // Yeah, I gotta figure out what activation means ig.
+    }
+}
+delegate_xdg_activation!(DendriteState);
