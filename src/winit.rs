@@ -88,11 +88,12 @@ pub fn init_winit(
                                 .space
                                 .map_element(elt, (0, (i as i32) * 100), is_active);
                         }
-                        if let Some(kbd) = state.seat.get_keyboard() {
-                            let surface = state.layout[state.active_pointer.unwrap()]
-                                .wl_surface()
-                                .map(|s| s.into_owned());
-                            kbd.set_focus(state, surface, SERIAL_COUNTER.next_serial());
+                        if let Some(index) = state.active_pointer {
+                            if let Some(kbd) = state.seat.get_keyboard() {
+                                let surface =
+                                    state.layout[index].wl_surface().map(|s| s.into_owned());
+                                kbd.set_focus(state, surface, SERIAL_COUNTER.next_serial());
+                            }
                         }
                     }
 
