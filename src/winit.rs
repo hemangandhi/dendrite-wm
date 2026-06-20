@@ -128,6 +128,11 @@ pub fn init_winit(
                         )
                     });
 
+                    // TODO: is this really the right spot for this?
+                    state.wlr_layer_state.layer_surfaces().for_each(|layer| {
+                        layer.send_configure();
+                    });
+
                     state.space.refresh();
                     state.popups.cleanup();
                     let _ = display.flush_clients();

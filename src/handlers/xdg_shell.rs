@@ -17,6 +17,7 @@ use smithay::{
     utils::{Rectangle, Serial, Size},
     wayland::{
         compositor::with_states,
+        seat::WaylandFocus,
         shell::xdg::{
             PopupSurface, PositionerState, ToplevelSurface, XdgShellHandler, XdgShellState,
             XdgToplevelSurfaceData,
@@ -138,6 +139,24 @@ impl XdgShellHandler for DendriteState {
 
     fn grab(&mut self, _surface: PopupSurface, _seat: wl_seat::WlSeat, _serial: Serial) {
         // TODO popup grabs
+    }
+
+    fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
+        let window = Window::new_wayland_window(surface);
+        let Some((idx, _w)) = self
+            .layout
+            .iter()
+            .enumerate()
+            .find(|(_i, w)| w.wl_surface() == window.wl_surface())
+        else {
+            tracing::warn!("No tracked window for surface {window:?}");
+            return;
+        };
+        self.layout.remove(idx);
+        if self.active_pointer.map(|i| i == idx).unwrap_or(false) {
+            self.active_pointer = None;
+        }
+        self.dirty = true;
     }
 }
 

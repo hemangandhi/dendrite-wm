@@ -16,7 +16,7 @@ use smithay::{
         compositor::{CompositorClientState, CompositorState},
         output::OutputManagerState,
         selection::data_device::DataDeviceState,
-        shell::xdg::XdgShellState,
+        shell::{wlr_layer::WlrLayerShellState, xdg::XdgShellState},
         shm::ShmState,
         socket::ListeningSocketSource,
         xdg_activation::XdgActivationState,
@@ -36,6 +36,7 @@ pub struct DendriteState {
     // Smithay State
     pub compositor_state: CompositorState,
     pub xdg_shell_state: XdgShellState,
+    pub wlr_layer_state: WlrLayerShellState,
     pub xdg_activation_state: XdgActivationState,
     pub shm_state: ShmState,
     pub output_manager_state: OutputManagerState,
@@ -58,6 +59,7 @@ impl DendriteState {
 
         let compositor_state = CompositorState::new::<Self>(&dh);
         let xdg_shell_state = XdgShellState::new::<Self>(&dh);
+        let wlr_layer_state = WlrLayerShellState::new::<DendriteState>(&dh);
         let shm_state = ShmState::new::<Self>(&dh, vec![]);
         let output_manager_state = OutputManagerState::new_with_xdg_output::<Self>(&dh);
         let mut seat_state = SeatState::new();
@@ -98,6 +100,7 @@ impl DendriteState {
 
             compositor_state,
             xdg_shell_state,
+            wlr_layer_state,
             shm_state,
             output_manager_state,
             seat_state,
