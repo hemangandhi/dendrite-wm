@@ -4,14 +4,16 @@ use smithay::wayland::seat::WaylandFocus;
 use smithay::{
     backend::{
         renderer::{
-            damage::OutputDamageTracker, element::surface::WaylandSurfaceRenderElement,
+            damage::OutputDamageTracker,
+            element::{surface::WaylandSurfaceRenderElement, AsRenderElements},
             gles::GlesRenderer,
         },
         winit::{self, WinitEvent},
     },
+    desktop::Window,
     output::{Mode, Output, PhysicalProperties, Subpixel},
     reexports::calloop::EventLoop,
-    utils::{Rectangle, Transform, SERIAL_COUNTER},
+    utils::{Point, Rectangle, Transform, SERIAL_COUNTER},
 };
 
 use crate::{CalloopData, DendriteState};
@@ -99,10 +101,48 @@ pub fn init_winit(
 
                     {
                         let (renderer, mut framebuffer) = backend.bind().unwrap();
+
+                        let render_elts: Vec<WaylandSurfaceRenderElement<GlesRenderer>> = state
+                            .space
+                            .elements_for_output(state.space.outputs().next().unwrap())
+                            .flat_map(|window| {
+                                let Some((index_of_window, _w)) = state
+                                    .layout
+                                    .iter()
+                                    .enumerate()
+                                    .find(|(_i, w)| w.wl_surface() == window.wl_surface())
+                                else {
+                                    return window.render_elements(
+                                        renderer,
+                                        Point::new(0, 0),
+                                        1.0.into(),
+                                        1.0,
+                                    );
+                                };
+                                window.render_elements(
+                                    renderer,
+                                    Point::new(0, index_of_window as i32 * 100)
+                                        .to_physical_precise_round(1.0),
+                                    1.0.into(),
+                                    if state
+                                        .active_pointer
+                                        .map(|i| {
+                                            state.layout[i].wl_surface() == window.wl_surface()
+                                        })
+                                        .unwrap_or(false)
+                                    {
+                                        1.0
+                                    } else {
+                                        0.9
+                                    },
+                                )
+                            })
+                            .collect();
+
                         smithay::desktop::space::render_output::<
                             _,
                             WaylandSurfaceRenderElement<GlesRenderer>,
-                            _,
+                            Window,
                             _,
                         >(
                             &output,
@@ -110,8 +150,8 @@ pub fn init_winit(
                             &mut framebuffer,
                             1.0,
                             0,
-                            [&state.space],
-                            &[],
+                            [],
+                            &render_elts,
                             &mut damage_tracker,
                             [0.1, 0.1, 0.1, 1.0],
                         )
