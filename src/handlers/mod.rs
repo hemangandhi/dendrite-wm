@@ -15,6 +15,7 @@ use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::reexports::wayland_server::Resource;
 use smithay::utils::Size;
 use smithay::wayland::output::OutputHandler;
+use smithay::wayland::seat::WaylandFocus;
 use smithay::wayland::selection::data_device::{
     set_data_device_focus, ClientDndGrabHandler, DataDeviceHandler, DataDeviceState,
     ServerDndGrabHandler,
@@ -90,10 +91,18 @@ impl XdgActivationHandler for DendriteState {
     fn request_activation(
         &mut self,
         token: XdgActivationToken,
-        token_data: XdgActivationTokenData,
+        _token_data: XdgActivationTokenData,
         surface: WlSurface,
     ) {
-        // Yeah, I gotta figure out what activation means ig.
+        if self.xdg_activation_state.remove_token(&token) {
+            self.active_pointer = self
+                .layout
+                .iter()
+                .enumerate()
+                .find(|(_i, w)| w.wl_surface().map(|cw| *cw == surface).unwrap_or(false))
+                .map(|(i, _w)| i);
+            self.dirty = true;
+        }
     }
 }
 delegate_xdg_activation!(DendriteState);
