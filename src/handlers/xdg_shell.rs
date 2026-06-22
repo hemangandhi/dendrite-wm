@@ -14,9 +14,10 @@ use smithay::{
             Resource,
         },
     },
-    utils::{Rectangle, Serial, Size},
+    utils::{Rectangle, Serial, Size, SERIAL_COUNTER},
     wayland::{
         compositor::with_states,
+        input_method::InputMethodSeat,
         seat::WaylandFocus,
         shell::xdg::{
             PopupSurface, PositionerState, ToplevelSurface, XdgShellHandler, XdgShellState,
@@ -137,8 +138,36 @@ impl XdgShellHandler for DendriteState {
         }
     }
 
-    fn grab(&mut self, _surface: PopupSurface, _seat: wl_seat::WlSeat, _serial: Serial) {
-        // TODO popup grabs
+    fn grab(&mut self, surface: PopupSurface, _seat: wl_seat::WlSeat, serial: Serial) {
+        tracing::info!("Here!");
+        let popup = PopupKind::Xdg(surface.clone());
+        let Ok(root) = find_popup_root_surface(&popup) else {
+            tracing::warn!("Grab: no popup root");
+            return;
+        };
+        let Ok(grab) = self.popups.grab_popup(root, popup, &self.seat, serial) else {
+            tracing::warn!("Grab: can't grab_popup from manager");
+            return;
+        };
+
+        self.active_pointer = None;
+        self.dirty = true;
+
+        // No double-grab and no grabbing by popups that can't take the keyboard.
+        if self.seat.input_method().keyboard_grabbed()
+            || layer_map_for_output(self.space.outputs().next().unwrap())
+                .layer_for_surface(surface.wl_surface(), WindowSurfaceType::TOPLEVEL)
+                .map(|s| s.can_receive_keyboard_focus())
+                .unwrap_or(false)
+        {
+            tracing::warn!("Grab: layer can't take keyboard or keyboard is grabbed");
+            return;
+        }
+        let Some(k) = self.seat.get_keyboard() else {
+            tracing::warn!("Grab: no seat keybaord");
+            return;
+        };
+        k.set_grab(self, PopupKeyboardGrab::new(&grab), serial);
     }
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
