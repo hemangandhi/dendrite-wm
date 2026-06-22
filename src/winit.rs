@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use smithay::desktop::layer_map_for_output;
 use smithay::wayland::seat::WaylandFocus;
 use smithay::{
     backend::{
@@ -102,42 +103,21 @@ pub fn init_winit(
                     {
                         let (renderer, mut framebuffer) = backend.bind().unwrap();
 
+                        let output = state.space.outputs().next().unwrap();
+                        let output_scale = output.current_scale().fractional_scale();
                         let render_elts: Vec<WaylandSurfaceRenderElement<GlesRenderer>> = state
-                            .space
-                            .elements_for_output(state.space.outputs().next().unwrap())
-                            .flat_map(|window| {
-                                let Some((index_of_window, _w)) = state
-                                    .layout
-                                    .iter()
-                                    .enumerate()
-                                    .find(|(_i, w)| w.wl_surface() == window.wl_surface())
-                                else {
-                                    return window.render_elements(
-                                        renderer,
-                                        Point::new(0, 0),
-                                        1.0.into(),
-                                        1.0,
-                                    );
-                                };
+                            .active_pointer
+                            .map(|i| {
+                                let window = &state.layout[i];
                                 window.render_elements(
                                     renderer,
-                                    Point::new(0, index_of_window as i32 * 100)
-                                        .to_physical_precise_round(1.0),
-                                    1.0.into(),
-                                    if state
-                                        .active_pointer
-                                        .map(|i| {
-                                            state.layout[i].wl_surface() == window.wl_surface()
-                                        })
-                                        .unwrap_or(false)
-                                    {
-                                        1.0
-                                    } else {
-                                        0.9
-                                    },
+                                    Point::new(0, (i as i32) * 100)
+                                        .to_physical_precise_round(output_scale),
+                                    output_scale.into(),
+                                    1.0,
                                 )
                             })
-                            .collect();
+                            .unwrap_or_default();
 
                         smithay::desktop::space::render_output::<
                             _,
@@ -148,9 +128,9 @@ pub fn init_winit(
                             &output,
                             renderer,
                             &mut framebuffer,
-                            1.0,
+                            0.9,
                             0,
-                            [],
+                            [&state.space],
                             &render_elts,
                             &mut damage_tracker,
                             [0.1, 0.1, 0.1, 1.0],
