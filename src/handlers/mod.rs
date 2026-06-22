@@ -1,19 +1,18 @@
 mod compositor;
 mod xdg_shell;
 
-use std::time::Duration;
-
 use crate::DendriteState;
+use std::time::Duration;
 
 //
 // Wl Seat
 //
 
-use smithay::desktop::{layer_map_for_output, LayerSurface};
+use smithay::desktop::{layer_map_for_output, LayerSurface, WindowSurfaceType};
 use smithay::input::{Seat, SeatHandler, SeatState};
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::reexports::wayland_server::Resource;
-use smithay::utils::Size;
+use smithay::utils::{Size, SERIAL_COUNTER};
 use smithay::wayland::output::OutputHandler;
 use smithay::wayland::seat::WaylandFocus;
 use smithay::wayland::selection::data_device::{
@@ -22,7 +21,7 @@ use smithay::wayland::selection::data_device::{
 };
 use smithay::wayland::selection::SelectionHandler;
 
-use smithay::wayland::shell::wlr_layer::WlrLayerShellHandler;
+use smithay::wayland::shell::wlr_layer::{KeyboardInteractivity, WlrLayerShellHandler};
 use smithay::wayland::xdg_activation::{
     XdgActivationHandler, XdgActivationState, XdgActivationToken, XdgActivationTokenData,
 };
@@ -116,22 +115,25 @@ impl WlrLayerShellHandler for DendriteState {
         &mut self,
         surface: smithay::wayland::shell::wlr_layer::LayerSurface,
         _output: Option<wayland_server::protocol::wl_output::WlOutput>,
-        layer: smithay::wayland::shell::wlr_layer::Layer,
+        _layer: smithay::wayland::shell::wlr_layer::Layer,
         namespace: String,
     ) {
+        let layer_surface = LayerSurface::new(surface, namespace);
         let Some(output) = self.space.outputs().next() else {
+            tracing::warn!("No outputs?");
             return;
         };
-        let mut map = layer_map_for_output(&output);
-        let layer_surface = LayerSurface::new(surface, namespace);
+        {
+            let mut map = layer_map_for_output(&output);
+            map.map_layer(&layer_surface).unwrap();
+        }
         layer_surface.layer_surface().with_pending_state(|s| {
             let Some(Size { w, h, .. }) = self.space.output_geometry(output).map(|g| g.size) else {
                 return;
             };
             s.size = Some(Size::new(w, h));
         });
-        layer_surface.layer_surface().send_pending_configure();
-        map.map_layer(&layer_surface).unwrap();
+        layer_surface.layer_surface().send_configure();
         layer_surface.send_frame(
             output,
             self.start_time.elapsed(),

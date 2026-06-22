@@ -16,8 +16,6 @@ use smithay::{
     },
 };
 
-use super::xdg_shell;
-
 impl CompositorHandler for DendriteState {
     fn compositor_state(&mut self) -> &mut CompositorState {
         &mut self.compositor_state
@@ -43,7 +41,7 @@ impl CompositorHandler for DendriteState {
             }
         };
 
-        xdg_shell::handle_commit(&mut self.popups, &self.space, surface);
+        self.handle_commit(surface);
         resize_grab::handle_commit(&mut self.space, surface);
     }
 }

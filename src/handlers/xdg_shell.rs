@@ -1,7 +1,10 @@
+use smithay::desktop::LayerSurface;
+use smithay::wayland::shell::wlr_layer::{KeyboardInteractivity, LayerSurfaceData};
 use smithay::{
     delegate_xdg_shell,
     desktop::{
-        find_popup_root_surface, get_popup_toplevel_coords, PopupKind, PopupManager, Space, Window,
+        find_popup_root_surface, get_popup_toplevel_coords, layer_map_for_output,
+        PopupKeyboardGrab, PopupKind, PopupManager, Space, Window, WindowSurfaceType,
     },
     input::{
         pointer::{Focus, GrabStartData as PointerGrabStartData},
@@ -215,46 +218,99 @@ fn check_grab(
     Some(start_data)
 }
 
-/// Should be called on `WlSurface::commit`
-pub fn handle_commit(popups: &mut PopupManager, space: &Space<Window>, surface: &WlSurface) {
-    // Handle toplevel commits.
-    if let Some(window) = space
-        .elements()
-        .find(|w| w.toplevel().unwrap().wl_surface() == surface)
-        .cloned()
-    {
-        let initial_configure_sent = with_states(surface, |states| {
-            states
-                .data_map
-                .get::<XdgToplevelSurfaceData>()
-                .unwrap()
-                .lock()
-                .unwrap()
-                .initial_configure_sent
-        });
-
-        if !initial_configure_sent {
-            window.toplevel().unwrap().send_configure();
-        }
-    }
-
-    // Handle popup commits.
-    popups.commit(surface);
-    if let Some(popup) = popups.find_popup(surface) {
-        match popup {
-            PopupKind::Xdg(ref xdg) => {
-                if !xdg.is_initial_configure_sent() {
-                    // NOTE: This should never fail as the initial configure is always
-                    // allowed.
-                    xdg.send_configure().expect("initial configure failed");
-                }
-            }
-            PopupKind::InputMethod(ref _input_method) => {}
-        }
-    }
-}
-
 impl DendriteState {
+    /// Should be called on `WlSurface::commit`
+    pub fn handle_commit(&mut self, surface: &WlSurface) {
+        // Handle toplevel commits.
+        if let Some(window) = self
+            .space
+            .elements()
+            .find(|w| w.toplevel().unwrap().wl_surface() == surface)
+            .cloned()
+        {
+            let initial_configure_sent = with_states(surface, |states| {
+                states
+                    .data_map
+                    .get::<XdgToplevelSurfaceData>()
+                    .unwrap()
+                    .lock()
+                    .unwrap()
+                    .initial_configure_sent
+            });
+
+            if !initial_configure_sent {
+                window.toplevel().unwrap().send_configure();
+            }
+        }
+
+        // Handle popup commits.
+        self.popups.commit(surface);
+        if let Some(popup) = self.popups.find_popup(surface) {
+            match popup {
+                PopupKind::Xdg(ref xdg) => {
+                    if !xdg.is_initial_configure_sent() {
+                        // NOTE: This should never fail as the initial configure is always
+                        // allowed.
+                        xdg.send_configure().expect("initial configure failed");
+                    }
+                }
+                PopupKind::InputMethod(ref _input_method) => {}
+            }
+        }
+
+        // Wlr popups
+        let Some(popup_surface) = self.get_popup_surface_to_focus(surface) else {
+            return;
+        };
+
+        if self
+            .active_pointer
+            .and_then(|i| self.layout[i].wl_surface())
+            .map(|s| *s != popup_surface)
+            .unwrap_or(false)
+        {
+            self.active_pointer = None;
+            self.dirty = true;
+            let Some(k) = self.seat.get_keyboard() else {
+                tracing::warn!("No keyboard");
+                return;
+            };
+            k.set_focus(self, None, SERIAL_COUNTER.next_serial());
+            k.set_focus(self, Some(popup_surface), SERIAL_COUNTER.next_serial());
+        }
+    }
+
+    fn get_popup_surface_to_focus(&self, surface: &WlSurface) -> Option<WlSurface> {
+        let mut map = layer_map_for_output(self.space.outputs().next().unwrap());
+        map.arrange();
+        let Some(layer) = map.layer_for_surface(
+            surface,
+            WindowSurfaceType::POPUP | WindowSurfaceType::TOPLEVEL,
+        ) else {
+            return None;
+        };
+        if !with_states(surface, |s| {
+            s.data_map
+                .get::<LayerSurfaceData>()
+                .map(|data| {
+                    data.lock()
+                        .map(|data| data.initial_configure_sent)
+                        .unwrap_or(false)
+                })
+                .unwrap_or(false)
+        }) {
+            layer.layer_surface().send_configure();
+            return None;
+        }
+        let state = layer.cached_state();
+        if state.keyboard_interactivity == KeyboardInteractivity::Exclusive
+            || state.keyboard_interactivity == KeyboardInteractivity::OnDemand
+        {
+            return Some(layer.wl_surface().clone());
+        }
+        return None;
+    }
+
     fn unconstrain_popup(&self, popup: &PopupSurface) {
         let Ok(root) = find_popup_root_surface(&PopupKind::Xdg(popup.clone())) else {
             return;
