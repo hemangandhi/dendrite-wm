@@ -17,6 +17,7 @@ use smithay::{
     wayland::{seat::WaylandFocus, xdg_activation::XdgActivationToken},
 };
 
+use crate::layout::action::Action;
 use crate::state::DendriteState;
 
 impl DendriteState {
@@ -39,7 +40,7 @@ impl DendriteState {
                         }
 
                         match keysym.raw_latin_sym_or_raw_current_sym() {
-                            Some(Keysym::space) => {
+                            Some(Keysym::Return) => {
                                 let (token, _) =
                                     this.xdg_activation_state.create_external_token(None);
                                 spawn_sync("contour", Some(token.clone()));
@@ -47,40 +48,23 @@ impl DendriteState {
                                 return FilterResult::Intercept(());
                             }
                             Some(Keysym::q) => {
-                                let Some((idx, tl)) = this.active_pointer.and_then(|idx| {
-                                    this.layout[idx].toplevel().map(|tl| (idx, tl))
-                                }) else {
-                                    return FilterResult::Intercept(());
-                                };
-                                tl.send_close();
-                                this.layout.remove(idx);
-                                this.dirty = true;
-                                if idx >= this.layout.len() {
-                                    this.active_pointer = if this.layout.is_empty() {
-                                        None
-                                    } else {
-                                        Some(0)
-                                    };
-                                }
+                                this.layout.send_close();
                                 return FilterResult::Intercept(());
                             }
-                            Some(Keysym::k) => {
-                                this.active_pointer = match this.active_pointer {
-                                    Some(i) if i < this.layout.len() - 1 => Some(i + 1),
-                                    Some(i) => Some(i),
-                                    None if this.layout.is_empty() => None,
-                                    None => Some(0),
-                                };
-                                this.dirty = true;
+                            Some(Keysym::h) => {
+                                this.layout.handle_action(Action::MoveLeft);
                                 return FilterResult::Intercept(());
                             }
                             Some(Keysym::j) => {
-                                this.active_pointer = match this.active_pointer {
-                                    Some(i) if i > 0 => Some(i - 1),
-                                    None if !this.layout.is_empty() => Some(0),
-                                    x => x,
-                                };
-                                this.dirty = true;
+                                this.layout.handle_action(Action::MoveDown);
+                                return FilterResult::Intercept(());
+                            }
+                            Some(Keysym::k) => {
+                                this.layout.handle_action(Action::MoveUp);
+                                return FilterResult::Intercept(());
+                            }
+                            Some(Keysym::l) => {
+                                this.layout.handle_action(Action::MoveRight);
                                 return FilterResult::Intercept(());
                             }
                             _ => return FilterResult::Forward,
@@ -118,32 +102,6 @@ impl DendriteState {
                 let serial = SERIAL_COUNTER.next_serial();
                 let button = event.button_code();
                 let button_state = event.state();
-
-                if ButtonState::Pressed == button_state && !pointer.is_grabbed() {
-                    if let Some((window, _loc)) = self
-                        .space
-                        .element_under(pointer.current_location())
-                        .map(|(w, l)| (w.clone(), l))
-                    {
-                        self.space.raise_element(&window, true);
-                        self.space.elements().for_each(|window| {
-                            window.toplevel().unwrap().send_pending_configure();
-                        });
-                        self.active_pointer = self
-                            .layout
-                            .iter()
-                            .enumerate()
-                            .find(|(_i, w)| w.wl_surface() == window.wl_surface())
-                            .map(|(i, _w)| i);
-                    } else {
-                        self.space.elements().for_each(|window| {
-                            window.set_activated(false);
-                            window.toplevel().unwrap().send_pending_configure();
-                        });
-                        self.active_pointer = None;
-                    }
-                    self.dirty = true;
-                };
 
                 pointer.button(
                     self,

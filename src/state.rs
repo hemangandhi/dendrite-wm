@@ -4,11 +4,11 @@ use smithay::{
     desktop::{PopupManager, Space, Window, WindowSurfaceType},
     input::{Seat, SeatState},
     reexports::{
-        calloop::{generic::Generic, EventLoop, Interest, LoopSignal, Mode, PostAction},
+        calloop::{EventLoop, Interest, LoopSignal, Mode, PostAction, generic::Generic},
         wayland_server::{
+            Display, DisplayHandle,
             backend::{ClientData, ClientId, DisconnectReason},
             protocol::wl_surface::WlSurface,
-            Display, DisplayHandle,
         },
     },
     utils::{Logical, Point},
@@ -24,6 +24,7 @@ use smithay::{
 };
 
 use crate::CalloopData;
+use crate::layout::Root;
 
 pub struct DendriteState {
     pub start_time: std::time::Instant,
@@ -46,9 +47,7 @@ pub struct DendriteState {
 
     pub seat: Seat<Self>,
 
-    pub layout: Vec<Window>,
-    pub active_pointer: Option<usize>,
-    pub dirty: bool,
+    pub layout: Root,
 }
 
 impl DendriteState {
@@ -108,9 +107,7 @@ impl DendriteState {
             popups,
             seat,
             xdg_activation_state,
-            layout: vec![],
-            active_pointer: None,
-            dirty: false,
+            layout: Root::default(),
         }
     }
 

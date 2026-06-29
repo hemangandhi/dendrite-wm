@@ -3,21 +3,21 @@ use smithay::wayland::shell::wlr_layer::{KeyboardInteractivity, LayerSurfaceData
 use smithay::{
     delegate_xdg_shell,
     desktop::{
-        find_popup_root_surface, get_popup_toplevel_coords, layer_map_for_output,
         PopupKeyboardGrab, PopupKind, PopupManager, Space, Window, WindowSurfaceType,
+        find_popup_root_surface, get_popup_toplevel_coords, layer_map_for_output,
     },
     input::{
-        pointer::{Focus, GrabStartData as PointerGrabStartData},
         Seat,
+        pointer::{Focus, GrabStartData as PointerGrabStartData},
     },
     reexports::{
         wayland_protocols::xdg::shell::server::xdg_toplevel,
         wayland_server::{
-            protocol::{wl_seat, wl_surface::WlSurface},
             Resource,
+            protocol::{wl_seat, wl_surface::WlSurface},
         },
     },
-    utils::{Rectangle, Serial, Size, SERIAL_COUNTER},
+    utils::{Rectangle, SERIAL_COUNTER, Serial, Size},
     wayland::{
         compositor::with_states,
         input_method::InputMethodSeat,
@@ -30,8 +30,8 @@ use smithay::{
 };
 
 use crate::{
-    grabs::{MoveSurfaceGrab, ResizeSurfaceGrab},
     DendriteState,
+    grabs::{MoveSurfaceGrab, ResizeSurfaceGrab},
 };
 
 impl XdgShellHandler for DendriteState {
@@ -40,19 +40,7 @@ impl XdgShellHandler for DendriteState {
     }
 
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
-        if let Some(Size { w, h, .. }) = self
-            .space
-            .outputs()
-            .next()
-            .and_then(|o| self.space.output_geometry(o))
-            .map(|g| g.size)
-        {
-            surface.with_pending_state(|p| p.bounds = Some(Size::new(w, h / 10)));
-            surface.send_pending_configure();
-        }
-        self.layout.push(Window::new_wayland_window(surface));
-        self.active_pointer = Some(0);
-        self.dirty = true;
+        self.layout.new_toplevel(surface);
     }
 
     fn new_popup(&mut self, surface: PopupSurface, _positioner: PositionerState) {
@@ -153,8 +141,7 @@ impl XdgShellHandler for DendriteState {
             return;
         };
 
-        self.active_pointer = None;
-        self.dirty = true;
+        self.layout.kill_focus();
 
         // No double-grab and no grabbing by popups that can't take the keyboard.
         if self.seat.input_method().keyboard_grabbed()
@@ -175,20 +162,7 @@ impl XdgShellHandler for DendriteState {
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
         let window = Window::new_wayland_window(surface);
-        let Some((idx, _w)) = self
-            .layout
-            .iter()
-            .enumerate()
-            .find(|(_i, w)| w.wl_surface() == window.wl_surface())
-        else {
-            tracing::warn!("No tracked window for surface {window:?}");
-            return;
-        };
-        self.layout.remove(idx);
-        if self.active_pointer.map(|i| i == idx).unwrap_or(false) {
-            self.active_pointer = None;
-        }
-        self.dirty = true;
+        self.layout.toplevel_destroyed(&window);
     }
 }
 
@@ -264,13 +238,13 @@ impl DendriteState {
         };
 
         if self
-            .active_pointer
-            .and_then(|i| self.layout[i].wl_surface())
+            .layout
+            .get_focused_window()
+            .and_then(|w| w.wl_surface())
             .map(|s| *s != popup_surface)
             .unwrap_or(false)
         {
-            self.active_pointer = None;
-            self.dirty = true;
+            self.layout.kill_focus();
             let Some(k) = self.seat.get_keyboard() else {
                 tracing::warn!("No keyboard");
                 return;

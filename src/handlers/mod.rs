@@ -8,18 +8,18 @@ use std::time::Duration;
 // Wl Seat
 //
 
-use smithay::desktop::{layer_map_for_output, LayerSurface, WindowSurfaceType};
+use smithay::desktop::{LayerSurface, WindowSurfaceType, layer_map_for_output};
 use smithay::input::{Seat, SeatHandler, SeatState};
-use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::reexports::wayland_server::Resource;
-use smithay::utils::{Size, SERIAL_COUNTER};
+use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
+use smithay::utils::{SERIAL_COUNTER, Size};
 use smithay::wayland::output::OutputHandler;
 use smithay::wayland::seat::WaylandFocus;
-use smithay::wayland::selection::data_device::{
-    set_data_device_focus, ClientDndGrabHandler, DataDeviceHandler, DataDeviceState,
-    ServerDndGrabHandler,
-};
 use smithay::wayland::selection::SelectionHandler;
+use smithay::wayland::selection::data_device::{
+    ClientDndGrabHandler, DataDeviceHandler, DataDeviceState, ServerDndGrabHandler,
+    set_data_device_focus,
+};
 
 use smithay::wayland::shell::wlr_layer::{KeyboardInteractivity, WlrLayerShellHandler};
 use smithay::wayland::xdg_activation::{
@@ -94,13 +94,7 @@ impl XdgActivationHandler for DendriteState {
         surface: WlSurface,
     ) {
         if self.xdg_activation_state.remove_token(&token) {
-            self.active_pointer = self
-                .layout
-                .iter()
-                .enumerate()
-                .find(|(_i, w)| w.wl_surface().map(|cw| *cw == surface).unwrap_or(false))
-                .map(|(i, _w)| i);
-            self.dirty = true;
+            self.layout.focus_surface(surface);
         }
     }
 }

@@ -4,6 +4,8 @@ mod handlers;
 
 mod grabs;
 mod input;
+mod layout;
+mod render;
 mod state;
 mod winit;
 

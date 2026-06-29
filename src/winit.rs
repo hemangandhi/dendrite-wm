@@ -1,12 +1,11 @@
+use std::borrow::Cow;
 use std::time::Duration;
 
-use smithay::desktop::layer_map_for_output;
 use smithay::wayland::seat::WaylandFocus;
 use smithay::{
     backend::{
         renderer::{
-            damage::OutputDamageTracker,
-            element::{surface::WaylandSurfaceRenderElement, AsRenderElements},
+            damage::OutputDamageTracker, element::surface::WaylandSurfaceRenderElement,
             gles::GlesRenderer,
         },
         winit::{self, WinitEvent},
@@ -14,9 +13,10 @@ use smithay::{
     desktop::Window,
     output::{Mode, Output, PhysicalProperties, Subpixel},
     reexports::calloop::EventLoop,
-    utils::{Point, Rectangle, Transform, SERIAL_COUNTER},
+    utils::{Rectangle, SERIAL_COUNTER, Size, Transform},
 };
 
+use crate::render::RenderData;
 use crate::{CalloopData, DendriteState};
 
 pub fn init_winit(
@@ -76,28 +76,24 @@ pub fn init_winit(
                         None,
                         None,
                     );
+                    let scale = 1.0 / output.current_scale().fractional_scale();
+                    state.layout.resize_output(Size::new(
+                        ((size.w as f64) * scale) as i32,
+                        ((size.h as f64) * scale) as i32,
+                    ));
                 }
                 WinitEvent::Input(event) => state.process_input_event(event),
                 WinitEvent::Redraw => {
                     let size = backend.window_size();
                     let damage = Rectangle::from_size(size);
 
-                    if state.dirty {
-                        state.dirty = false;
-                        for (i, elt) in state.layout.iter().cloned().enumerate() {
-                            let is_active = state.active_pointer.map(|p| p == i).unwrap_or(false);
-                            elt.set_activated(is_active);
-                            state
-                                .space
-                                .map_element(elt, (0, (i as i32) * 100), is_active);
-                        }
-                        if let Some(index) = state.active_pointer {
-                            if let Some(kbd) = state.seat.get_keyboard() {
-                                let surface =
-                                    state.layout[index].wl_surface().map(|s| s.into_owned());
-                                kbd.set_focus(state, surface, SERIAL_COUNTER.next_serial());
-                            }
-                        }
+                    if let Some(kbd) = state.seat.get_keyboard() {
+                        let s = state
+                            .layout
+                            .get_focused_window()
+                            .and_then(|w| w.wl_surface())
+                            .map(Cow::into_owned);
+                        kbd.set_focus(state, s, SERIAL_COUNTER.next_serial());
                     }
 
                     {
@@ -105,27 +101,21 @@ pub fn init_winit(
 
                         let output = state.space.outputs().next().unwrap();
                         let output_scale = output.current_scale().fractional_scale();
-                        let render_elts: Vec<WaylandSurfaceRenderElement<GlesRenderer>> = state
-                            .active_pointer
-                            .map(|i| {
-                                let window = &state.layout[i];
-                                window.render_elements(
-                                    renderer,
-                                    Point::new(0, (i as i32) * 100)
-                                        .to_physical_precise_round(output_scale),
-                                    output_scale.into(),
-                                    1.0,
-                                )
-                            })
-                            .unwrap_or_default();
-
+                        let mut render_elts = vec![];
+                        let mut render_data = RenderData::new(
+                            &mut state.space,
+                            &mut render_elts,
+                            renderer,
+                            output_scale,
+                        );
+                        state.layout.render_to_space(&mut render_data);
                         smithay::desktop::space::render_output::<
                             _,
                             WaylandSurfaceRenderElement<GlesRenderer>,
                             Window,
                             _,
                         >(
-                            &output,
+                            &state.space.outputs().next().unwrap(),
                             renderer,
                             &mut framebuffer,
                             0.9,
