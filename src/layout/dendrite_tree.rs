@@ -98,6 +98,7 @@ fn delete_child_and_suggest_focus(
     children: &mut Vec<DendriteTree>,
     i: usize,
 ) -> (FocusSuggestion, bool) {
+    children.remove(i);
     if i != 0 {
         (FocusSuggestion::singleton(i - 1), false)
     } else if children.is_empty() {
@@ -146,7 +147,6 @@ fn scroll_window_into_view(
         }
     };
     for child in children {
-        tracing::warn!("Bumping by {bump:?}");
         child.update_position(bump);
     }
 }
@@ -350,7 +350,7 @@ impl DendriteTree {
             return (FocusSuggestion::default(), false);
         };
 
-        let offset_direction = if *i == children.len() - 1 { -1 } else { 1 };
+        let offset_direction = if *i == children.len() - 1 { 1 } else { -1 };
         let offset = match orientation {
             Orientation::Vertical => {
                 Point::new(0, offset_direction * children[*i].geometry().size.h)
@@ -370,7 +370,7 @@ impl DendriteTree {
                 child.update_position(offset);
             }
         } else {
-            for child in children.iter_mut().skip(*i + 1) {
+            for child in children.iter_mut().skip(*i) {
                 child.update_position(offset);
             }
         }
