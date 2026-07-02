@@ -327,9 +327,11 @@ impl DendriteTree {
         match (self, path) {
             (DendriteTree::Leaf { window, .. }, []) => Some(window),
             (DendriteTree::Leaf { .. }, _x) => None,
-            (DendriteTree::Container { children, .. }, [x]) => children[*x].window_at_path(&[]),
+            (DendriteTree::Container { children, .. }, [x]) => {
+                children.get(*x).and_then(move |t| t.window_at_path(&[]))
+            }
             (DendriteTree::Container { children, .. }, [x, xs @ ..]) => {
-                children[*x].window_at_path(xs)
+                children.get(*x).and_then(move |t| t.window_at_path(xs))
             }
             (DendriteTree::Container { .. }, []) => None,
         }
