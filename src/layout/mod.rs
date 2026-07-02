@@ -29,20 +29,18 @@ impl From<Size<i32, Logical>> for Root {
 
 impl Root {
     pub fn render_to_space(&mut self, render_data: &mut RenderData) {
-        if !self.is_dirty {
-            return;
+        if self.is_dirty {
+            for w in self.windows_to_deactivate.drain(..) {
+                w.set_activated(false);
+            }
+            if let Some(w) = self.tree.window_at_path(&self.active_window) {
+                w.set_activated(true);
+            }
         }
         self.is_dirty = false;
 
-        for w in self.windows_to_deactivate.drain(..) {
-            w.set_activated(false);
-        }
-        if let Some(w) = self.tree.window_at_path(&self.active_window) {
-            w.set_activated(true);
-        }
-
         self.tree
-            .render_to_space(Some(&self.active_window), render_data);
+            .render_to_space_root(Some(&self.active_window), render_data);
     }
 
     pub fn new_toplevel(&mut self, surface: ToplevelSurface) {

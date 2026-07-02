@@ -152,21 +152,25 @@ fn scroll_window_into_view(
 }
 
 impl DendriteTree {
-    pub fn render_to_space(&self, active_window: Option<&[usize]>, render_data: &mut RenderData) {
+    fn render_to_space(
+        &self,
+        active_window: Option<&[usize]>,
+        render_data: &mut RenderData,
+        parent_geometry: Rectangle<i32, Logical>,
+    ) {
         let geometry = self.geometry();
         match self {
             DendriteTree::Leaf { window, .. } => {
-                render_data.render_or_map(window, geometry.loc, active_window.is_some());
+                if !parent_geometry.contains(geometry.loc)
+                    && !parent_geometry.contains(geometry.loc + geometry.size)
+                {
+                    render_data.unmap(window);
+                } else {
+                    render_data.render_or_map(window, geometry.loc, active_window.is_some());
+                }
             }
             DendriteTree::Container { children, .. } => {
                 for (i, child) in children.iter().enumerate() {
-                    // TODO: track children that just went off-screen -- they need a render.
-                    // let child_geometry = child.geometry();
-                    // if !geometry.contains(child_geometry.loc)
-                    //     && !geometry.contains(child_geometry.loc + child_geometry.size)
-                    // {
-                    //     continue;
-                    // }
                     child.render_to_space(
                         active_window.and_then(|a| match a {
                             [] => Some(&[] as &[usize]),
@@ -174,11 +178,20 @@ impl DendriteTree {
                             _ => None,
                         }),
                         render_data,
+                        geometry,
                     );
                     // TODO: we may have to raise any windows at our level since the space behaves that way.
                 }
             }
         }
+    }
+
+    pub fn render_to_space_root(
+        &self,
+        active_window: Option<&[usize]>,
+        render_data: &mut RenderData,
+    ) {
+        self.render_to_space(active_window, render_data, self.geometry());
     }
 
     pub fn new_toplevel(&mut self, surface: ToplevelSurface, focus: &[usize]) {

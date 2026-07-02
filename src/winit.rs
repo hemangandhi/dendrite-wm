@@ -99,23 +99,18 @@ pub fn init_winit(
                     {
                         let (renderer, mut framebuffer) = backend.bind().unwrap();
 
-                        let output = state.space.outputs().next().unwrap();
-                        let output_scale = output.current_scale().fractional_scale();
                         let mut render_elts = vec![];
-                        let mut render_data = RenderData::new(
-                            &mut state.space,
-                            &mut render_elts,
-                            renderer,
-                            output_scale,
-                        );
+                        let mut render_data =
+                            RenderData::new(&mut state.space, &mut render_elts, renderer);
                         state.layout.render_to_space(&mut render_data);
+                        let output = state.space.outputs().next().unwrap();
                         smithay::desktop::space::render_output::<
                             _,
                             WaylandSurfaceRenderElement<GlesRenderer>,
                             Window,
                             _,
                         >(
-                            &state.space.outputs().next().unwrap(),
+                            &output,
                             renderer,
                             &mut framebuffer,
                             0.9,

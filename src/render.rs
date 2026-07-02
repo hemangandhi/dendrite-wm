@@ -16,8 +16,13 @@ impl<'a> RenderData<'a> {
         space: &'a mut Space<Window>,
         output_elements: &'a mut Vec<WaylandSurfaceRenderElement<GlesRenderer>>,
         renderer: &'a mut GlesRenderer,
-        scale: f64,
     ) -> Self {
+        let scale = space
+            .outputs()
+            .next()
+            .unwrap()
+            .current_scale()
+            .fractional_scale();
         Self {
             space,
             output_elements,
@@ -26,7 +31,12 @@ impl<'a> RenderData<'a> {
         }
     }
 
+    pub fn unmap(&mut self, window: &Window) {
+        self.space.unmap_elem(window);
+    }
+
     pub fn render_or_map(&mut self, window: &Window, coords: Point<i32, Logical>, active: bool) {
+        self.space.map_element(window.clone(), coords, active);
         if active {
             self.output_elements.extend(window.render_elements(
                 self.renderer,
@@ -35,7 +45,5 @@ impl<'a> RenderData<'a> {
                 1.0,
             ))
         }
-        // self.space.unmap_elem(window); // TODO: needed?
-        self.space.map_element(window.clone(), coords, active);
     }
 }
