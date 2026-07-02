@@ -52,19 +52,19 @@ impl DendriteState {
                                 return FilterResult::Intercept(());
                             }
                             Some(Keysym::h) => {
-                                this.layout.handle_action(Action::MoveLeft);
+                                this.layout.handle_action(Action::MoveFocusLeft);
                                 return FilterResult::Intercept(());
                             }
                             Some(Keysym::j) => {
-                                this.layout.handle_action(Action::MoveDown);
+                                this.layout.handle_action(Action::MoveFocusDown);
                                 return FilterResult::Intercept(());
                             }
                             Some(Keysym::k) => {
-                                this.layout.handle_action(Action::MoveUp);
+                                this.layout.handle_action(Action::MoveFocusUp);
                                 return FilterResult::Intercept(());
                             }
                             Some(Keysym::l) => {
-                                this.layout.handle_action(Action::MoveRight);
+                                this.layout.handle_action(Action::MoveFocusRight);
                                 return FilterResult::Intercept(());
                             }
                             _ => return FilterResult::Forward,

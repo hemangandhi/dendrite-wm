@@ -338,6 +338,7 @@ impl DendriteTree {
     }
 
     pub fn toplevel_destroyed(&mut self, path: &[usize]) -> (FocusSuggestion, bool) {
+        tracing::warn!("Destroying {path:?}");
         let DendriteTree::Container {
             children,
             orientation,
@@ -392,7 +393,7 @@ impl DendriteTree {
         return new_focus;
     }
 
-    fn handle_move(
+    fn handle_move_focus(
         &mut self,
         focus: &mut Vec<usize>,
         index: usize,
@@ -418,7 +419,7 @@ impl DendriteTree {
         let mut moved_up = false;
         if focus.len() - index > 1 {
             let Some((residual_action, inner_suggested_point)) =
-                children[index].handle_move(focus, index + 1, action)
+                children[index].handle_move_focus(focus, index + 1, action)
             else {
                 return None;
             };
@@ -429,16 +430,16 @@ impl DendriteTree {
         }
 
         let child_index_offset: isize = match (action, *orientation) {
-            (Action::MoveUp | Action::MoveDown, Orientation::Horizontal) => {
+            (Action::MoveFocusUp | Action::MoveFocusDown, Orientation::Horizontal) => {
                 return Some((action, suggested_point));
             }
-            (Action::MoveUp, Orientation::Vertical) => -1,
-            (Action::MoveDown, Orientation::Vertical) => 1,
-            (Action::MoveLeft | Action::MoveRight, Orientation::Vertical) => {
+            (Action::MoveFocusUp, Orientation::Vertical) => -1,
+            (Action::MoveFocusDown, Orientation::Vertical) => 1,
+            (Action::MoveFocusLeft | Action::MoveFocusRight, Orientation::Vertical) => {
                 return Some((action, suggested_point));
             }
-            (Action::MoveLeft, Orientation::Horizontal) => -1,
-            (Action::MoveRight, Orientation::Horizontal) => 1,
+            (Action::MoveFocusLeft, Orientation::Horizontal) => -1,
+            (Action::MoveFocusRight, Orientation::Horizontal) => 1,
         };
 
         let new_child_index = (focus[index] as isize) + child_index_offset;
@@ -497,9 +498,11 @@ impl DendriteTree {
 
     pub fn handle_action(&mut self, focus: &mut Vec<usize>, action: Action) -> Option<Action> {
         match action {
-            Action::MoveUp | Action::MoveDown | Action::MoveLeft | Action::MoveRight => {
-                self.handle_move(focus, 0, action).map(|(a, _i)| a)
-            }
+            Action::MoveFocusUp
+            | Action::MoveFocusDown
+            | Action::MoveFocusLeft
+            | Action::MoveFocusRight => self.handle_move(focus, 0, action).map(|(a, _i)| a),
+            | Action::MoveFocusRight => self.handle_move_focus(focus, 0, action).map(|(a, _i)| a),
         }
     }
 
