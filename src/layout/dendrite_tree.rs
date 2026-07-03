@@ -89,7 +89,10 @@ impl From<Size<i32, Logical>> for DendriteTree {
 }
 
 fn configure_surface_in_size(size: Size<i32, Logical>, surface: ToplevelSurface) -> Window {
-    surface.with_pending_state(|p| p.bounds = Some(size));
+    surface.with_pending_state(|p| {
+        p.bounds = Some(size);
+        p.size = Some(size)
+    });
     surface.send_pending_configure();
     return Window::new_wayland_window(surface);
 }
@@ -161,9 +164,7 @@ impl DendriteTree {
         let geometry = self.geometry();
         match self {
             DendriteTree::Leaf { window, .. } => {
-                if !parent_geometry.contains(geometry.loc)
-                    && !parent_geometry.contains(geometry.loc + geometry.size)
-                {
+                if !parent_geometry.overlaps_or_touches(geometry) {
                     render_data.unmap(window);
                 } else {
                     render_data.render_or_map(window, geometry.loc, active_window.is_some());
@@ -240,6 +241,7 @@ impl DendriteTree {
             return;
         };
 
+        tracing::warn!("Inserting after {x:?}");
         let new_geometry = Rectangle::new(
             match orientation {
                 Orientation::Vertical => Point::new(
@@ -406,18 +408,18 @@ impl DendriteTree {
             ..
         } = self
         else {
-            tracing::warn!("Invalid move of focus on leaf");
+            tracing::warn!("Invalid move of focus on leaf! Focus {focus:?}, index {index:?}");
             return None;
         };
 
         if index >= focus.len() {
-            tracing::warn!("Focus {focus:?} don't have index {index:?}");
+            tracing::warn!("Focus {focus:?} doesn't have index {index:?}");
             return None;
         }
 
         let mut suggested_point = geometry.loc;
         let mut moved_up = false;
-        if focus.len() - index > 1 {
+        if index < focus.len() - 1 {
             let Some((residual_action, inner_suggested_point)) =
                 children[index].handle_move_focus(focus, index + 1, action)
             else {
@@ -444,11 +446,11 @@ impl DendriteTree {
 
         let new_child_index = (focus[index] as isize) + child_index_offset;
         if new_child_index < 0 || new_child_index >= (children.len() as isize) {
-            // TODO: is this wise or do I need index - 1
-            if index > 0 {
-                focus.truncate(index);
-            }
             return Some((action, suggested_point));
+        }
+
+        if moved_up {
+            focus.truncate(index);
         }
 
         focus[index] = new_child_index as usize;
@@ -497,6 +499,7 @@ impl DendriteTree {
     }
 
     pub fn handle_action(&mut self, focus: &mut Vec<usize>, action: Action) -> Option<Action> {
+        tracing::info!("Handle {action:?} at {focus:?}");
         match action {
             Action::MoveFocusUp
             | Action::MoveFocusDown
