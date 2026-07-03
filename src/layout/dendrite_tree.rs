@@ -44,6 +44,15 @@ pub enum Orientation {
     Horizontal,
 }
 
+impl Orientation {
+    pub fn perpendicular(self) -> Self {
+        match self {
+            Orientation::Vertical => Orientation::Horizontal,
+            Orientation::Horizontal => Orientation::Vertical,
+        }
+    }
+}
+
 pub enum DendriteTree {
     Leaf {
         window: Window,
@@ -401,6 +410,7 @@ impl DendriteTree {
         index: usize,
         mut action: Action,
     ) -> Option<(Action, Point<i32, Logical>)> {
+        tracing::info!("Handling move focus {action:?} at {focus:?}[{index:?}]");
         let DendriteTree::Container {
             children,
             orientation,
@@ -421,7 +431,7 @@ impl DendriteTree {
         let mut moved_up = false;
         if index < focus.len() - 1 {
             let Some((residual_action, inner_suggested_point)) =
-                children[index].handle_move_focus(focus, index + 1, action)
+                children[focus[index]].handle_move_focus(focus, index + 1, action)
             else {
                 return None;
             };
@@ -442,6 +452,8 @@ impl DendriteTree {
             }
             (Action::MoveFocusLeft, Orientation::Horizontal) => -1,
             (Action::MoveFocusRight, Orientation::Horizontal) => 1,
+            // TODO: panic instead? Or be smarter about types here?
+            _ => return Some((action, suggested_point)),
         };
 
         let new_child_index = (focus[index] as isize) + child_index_offset;
@@ -450,7 +462,7 @@ impl DendriteTree {
         }
 
         if moved_up {
-            focus.truncate(index);
+            focus.truncate(index + 1);
         }
 
         focus[index] = new_child_index as usize;
@@ -460,9 +472,6 @@ impl DendriteTree {
             *geometry,
             children,
         );
-        if !moved_up {
-            return None;
-        }
 
         let mut child: &mut DendriteTree = &mut children[new_child_index as usize];
         while let DendriteTree::Container {
@@ -498,14 +507,58 @@ impl DendriteTree {
         return None;
     }
 
+    fn make_inner_tree(&mut self, focus: &mut Vec<usize>, index: usize) {
+        let DendriteTree::Container {
+            children,
+            orientation,
+            ..
+        } = self
+        else {
+            tracing::warn!("Making inner tree reached a leaf!");
+            return;
+        };
+
+        if focus.is_empty() {
+            tracing::warn!("Empty focus while making an inner tree!");
+            return;
+        }
+
+        if index < focus.len() - 1 {
+            children[focus[index]].make_inner_tree(focus, index + 1);
+            return;
+        }
+
+        let i = focus[index];
+        let mut new_tree = DendriteTree::Container {
+            children: vec![],
+            geometry: children[i].geometry(),
+            orientation: orientation.perpendicular(),
+            is_tabbed: false,
+        };
+        std::mem::swap(&mut new_tree, &mut children[i]);
+        let DendriteTree::Container {
+            children: new_children,
+            ..
+        } = &mut children[i]
+        else {
+            panic!("The tree that was swapped in wasn't an inner node?");
+        };
+        new_children.push(new_tree);
+
+        focus.push(0);
+    }
+
     pub fn handle_action(&mut self, focus: &mut Vec<usize>, action: Action) -> Option<Action> {
         tracing::info!("Handle {action:?} at {focus:?}");
         match action {
             Action::MoveFocusUp
             | Action::MoveFocusDown
             | Action::MoveFocusLeft
-            | Action::MoveFocusRight => self.handle_move(focus, 0, action).map(|(a, _i)| a),
             | Action::MoveFocusRight => self.handle_move_focus(focus, 0, action).map(|(a, _i)| a),
+            Action::MakeInnerTree => {
+                self.make_inner_tree(focus, 0);
+                None
+            }
         }
     }
 

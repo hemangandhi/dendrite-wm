@@ -4,4 +4,5 @@ pub enum Action {
     MoveFocusDown,
     MoveFocusLeft,
     MoveFocusRight,
+    MakeInnerTree,
 }

@@ -67,6 +67,10 @@ impl DendriteState {
                                 this.layout.handle_action(Action::MoveFocusRight);
                                 return FilterResult::Intercept(());
                             }
+                            Some(Keysym::semicolon) => {
+                                this.layout.handle_action(Action::MakeInnerTree);
+                                return FilterResult::Intercept(());
+                            }
                             _ => return FilterResult::Forward,
                         };
                     },
