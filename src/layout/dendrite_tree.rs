@@ -1,4 +1,5 @@
 use smithay::desktop::Window;
+use smithay::desktop::space::SpaceElement;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{Logical, Point, Rectangle, Size};
 use smithay::wayland::seat::WaylandFocus;
@@ -169,6 +170,7 @@ impl DendriteTree {
         active_window: Option<&[usize]>,
         render_data: &mut RenderData,
         parent_geometry: Rectangle<i32, Logical>,
+        layer_num: u8,
     ) {
         let geometry = self.geometry();
         match self {
@@ -176,6 +178,8 @@ impl DendriteTree {
                 if !parent_geometry.overlaps_or_touches(geometry) {
                     render_data.unmap(window);
                 } else {
+                    // Note: active windows will never actually have something atop them.
+                    window.override_z_index(30 - layer_num);
                     render_data.render_or_map(window, geometry.loc, active_window.is_some());
                 }
             }
@@ -189,6 +193,7 @@ impl DendriteTree {
                         }),
                         render_data,
                         geometry,
+                        layer_num + 1,
                     );
                     // TODO: we may have to raise any windows at our level since the space behaves that way.
                 }
@@ -201,7 +206,7 @@ impl DendriteTree {
         active_window: Option<&[usize]>,
         render_data: &mut RenderData,
     ) {
-        self.render_to_space(active_window, render_data, self.geometry());
+        self.render_to_space(active_window, render_data, self.geometry(), 0);
     }
 
     pub fn new_toplevel(&mut self, surface: ToplevelSurface, focus: &[usize]) {
