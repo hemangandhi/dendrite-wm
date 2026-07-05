@@ -48,7 +48,7 @@ impl DendriteState {
                                 return FilterResult::Intercept(());
                             }
                             Some(Keysym::q) => {
-                                this.layout.send_close();
+                                this.layout.handle_action(Action::CloseWindow);
                                 return FilterResult::Intercept(());
                             }
                             Some(Keysym::h) => {

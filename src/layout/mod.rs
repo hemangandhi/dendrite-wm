@@ -68,23 +68,6 @@ impl Root {
         }
     }
 
-    pub fn send_close(&mut self) {
-        self.is_dirty = true;
-        let Some((w, tl)) = self
-            .tree
-            .window_at_path(&self.active_window)
-            .and_then(|w| w.toplevel().map(|tl| (w, tl)))
-        else {
-            tracing::info!("No active window or no top level to send_close to.");
-            return;
-        };
-
-        tl.send_close();
-        self.windows_to_deactivate.push(w.clone());
-        self.active_window = self.tree.toplevel_destroyed(&self.active_window).0.into();
-        tracing::info!("Sent close, new active window: {0:?}", self.active_window);
-    }
-
     pub fn handle_action(&mut self, action: action::Action) {
         let old_window = self.tree.window_at_path(&self.active_window).cloned();
         if !self

@@ -5,4 +5,5 @@ pub enum Action {
     MoveFocusLeft,
     MoveFocusRight,
     MakeInnerTree,
+    CloseWindow,
 }

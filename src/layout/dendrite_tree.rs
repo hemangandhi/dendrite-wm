@@ -1,5 +1,4 @@
 use smithay::desktop::Window;
-use smithay::desktop::space::SpaceElement;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{Logical, Point, Rectangle, Size};
 use smithay::wayland::seat::WaylandFocus;
@@ -353,6 +352,23 @@ impl DendriteTree {
         }
     }
 
+    fn send_close(&self) {
+        match self {
+            DendriteTree::Leaf { window, .. } => {
+                if let Some(tl) = window.toplevel() {
+                    tl.send_close();
+                } else {
+                    tracing::warn!("Couldn't get toplevel for window.");
+                }
+            }
+            DendriteTree::Container { children, .. } => {
+                for c in children {
+                    c.send_close()
+                }
+            }
+        }
+    }
+
     pub fn toplevel_destroyed(&mut self, path: &[usize]) -> (FocusSuggestion, bool) {
         tracing::info!("Destroying {path:?}");
         let DendriteTree::Container {
@@ -381,6 +397,8 @@ impl DendriteTree {
             tracing::warn!("toplevel_destroyed called with empty path?");
             return (FocusSuggestion::default(), false);
         };
+
+        children[*i].send_close();
 
         let offset_direction = if *i == children.len() - 1 { 1 } else { -1 };
         let offset = match orientation {
@@ -560,6 +578,10 @@ impl DendriteTree {
             | Action::MoveFocusRight => self.handle_move_focus(focus, 0, action).map(|(a, _i)| a),
             Action::MakeInnerTree => {
                 self.make_inner_tree(focus, 0);
+                None
+            }
+            Action::CloseWindow => {
+                let _ = std::mem::replace(focus, self.toplevel_destroyed(&focus).0.into());
                 None
             }
         }
