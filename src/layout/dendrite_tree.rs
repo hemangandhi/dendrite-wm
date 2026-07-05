@@ -112,12 +112,12 @@ fn delete_child_and_suggest_focus(
     i: usize,
 ) -> (FocusSuggestion, bool) {
     children.remove(i);
-    if i != 0 {
-        (FocusSuggestion::singleton(i - 1), false)
-    } else if children.is_empty() {
+    if children.is_empty() {
         (FocusSuggestion::default(), true)
+    } else if i != 0 {
+        (FocusSuggestion::singleton(i - 1), false)
     } else {
-        (FocusSuggestion::singleton(1), false)
+        (FocusSuggestion::singleton(0), false)
     }
 }
 
@@ -354,7 +354,7 @@ impl DendriteTree {
     }
 
     pub fn toplevel_destroyed(&mut self, path: &[usize]) -> (FocusSuggestion, bool) {
-        tracing::warn!("Destroying {path:?}");
+        tracing::info!("Destroying {path:?}");
         let DendriteTree::Container {
             children,
             orientation,
@@ -415,7 +415,6 @@ impl DendriteTree {
         index: usize,
         mut action: Action,
     ) -> Option<(Action, Point<i32, Logical>)> {
-        tracing::info!("Handling move focus {action:?} at {focus:?}[{index:?}]");
         let DendriteTree::Container {
             children,
             orientation,
@@ -440,7 +439,6 @@ impl DendriteTree {
             else {
                 return None;
             };
-            tracing::warn!("Bubbling up from {focus:?} at {index:?}");
             action = residual_action;
             suggested_point = inner_suggested_point;
             moved_up = true;

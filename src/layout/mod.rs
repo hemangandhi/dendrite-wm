@@ -82,6 +82,7 @@ impl Root {
         tl.send_close();
         self.windows_to_deactivate.push(w.clone());
         self.active_window = self.tree.toplevel_destroyed(&self.active_window).0.into();
+        tracing::info!("Sent close, new active window: {0:?}", self.active_window);
     }
 
     pub fn handle_action(&mut self, action: action::Action) {
