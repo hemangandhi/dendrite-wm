@@ -154,7 +154,14 @@ impl<W> DendriteTree<W> {
     fn update_position(&mut self, delta: Point<i32, Logical>) {
         match self {
             DendriteTree::Leaf { geometry, .. } => geometry.loc += delta,
-            DendriteTree::Container { geometry, .. } => geometry.loc += delta,
+            DendriteTree::Container {
+                geometry, children, ..
+            } => {
+                for child in children {
+                    child.update_position(delta);
+                }
+                geometry.loc += delta
+            }
         }
     }
 
