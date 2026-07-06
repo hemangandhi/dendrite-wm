@@ -136,14 +136,14 @@ pub mod test_render {
 
     use smithay::utils::{Logical, Point, Size};
 
-    #[derive(Clone, Default, Eq, PartialEq)]
+    #[derive(Clone, Default, Eq, PartialEq, Debug)]
     pub struct MappingData {
         pub coords: Point<i32, Logical>,
         pub active: bool,
         pub z_index: u8,
     }
 
-    #[derive(Clone, Default, Eq, PartialEq)]
+    #[derive(Clone, Default, Eq, PartialEq, Debug)]
     pub struct TestRenderElement {
         pub id: u32,
         pub got_close: RefCell<bool>,

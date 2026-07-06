@@ -1,13 +1,9 @@
-use smithay::desktop::Window;
-use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{Logical, Point, Rectangle, Size};
-use smithay::wayland::seat::WaylandFocus;
-use smithay::wayland::shell::xdg::ToplevelSurface;
 
 use crate::layout::action::Action;
 use crate::render::{RenderData, RenderableElement};
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct FocusSuggestion(Vec<usize>);
 
 impl From<FocusSuggestion> for Vec<usize> {
@@ -180,6 +176,14 @@ impl<W> DendriteTree<W> {
                 children.get(*x).and_then(move |t| t.window_at_path(xs))
             }
             (DendriteTree::Container { .. }, []) => None,
+        }
+    }
+
+    pub fn resize_output(&mut self, new_size: Size<i32, Logical>) {
+        match self {
+            DendriteTree::Leaf { geometry, .. } => geometry.size = new_size,
+            // TODO: scale children?
+            DendriteTree::Container { geometry, .. } => geometry.size = new_size,
         }
     }
 }
@@ -572,14 +576,6 @@ impl<W: RenderableElement> DendriteTree<W> {
             }
         }
     }
-
-    pub fn resize_output(&mut self, new_size: Size<i32, Logical>) {
-        match self {
-            DendriteTree::Leaf { geometry, .. } => geometry.size = new_size,
-            // TODO: scale children?
-            DendriteTree::Container { geometry, .. } => geometry.size = new_size,
-        }
-    }
 }
 
 #[cfg(test)]
@@ -603,5 +599,65 @@ mod test {
             return;
         };
         assert_eq!(window.id, 1);
+    }
+
+    mod one_layer {
+        use super::super::DendriteTree;
+        use crate::render::test_render::TestRenderElement;
+        use smithay::utils::Size;
+
+        #[test]
+        fn test_many_spawns() {
+            let mut tree = DendriteTree::<TestRenderElement>::default();
+            tree.resize_output(Size::new(256, 256));
+            let focus = vec![];
+            for i in 1..=5 {
+                tree.new_toplevel(TestRenderElement::with_id(i), &focus);
+            }
+            let DendriteTree::Container { children, .. } = tree else {
+                assert!(false);
+                return;
+            };
+            assert_eq!(children.len(), 5);
+            assert!(children.iter().enumerate().all(|(i, w)| match w {
+                DendriteTree::Leaf { window, .. } =>
+                    window.id == ((i + 1) as u32) && window.size == Size::new(128, 256),
+                DendriteTree::Container { .. } => false,
+            }));
+        }
+
+        #[test]
+        fn test_move_focus() {
+            let mut tree = DendriteTree::<TestRenderElement>::default();
+            tree.resize_output(Size::new(256, 256));
+            let mut focus = vec![];
+            for i in 1..=5 {
+                tree.new_toplevel(TestRenderElement::with_id(i), &focus);
+            }
+            // Needs focus to actually be set.
+            focus.push(0);
+            for i in 1..5 {
+                tree.handle_move_focus(
+                    &mut focus,
+                    0,
+                    crate::layout::action::Action::MoveFocusRight,
+                );
+                assert_eq!(focus, vec![i]);
+            }
+        }
+
+        #[test]
+        fn test_get_path() {
+            let mut tree = DendriteTree::<TestRenderElement>::default();
+            tree.resize_output(Size::new(256, 256));
+            let focus = vec![];
+            for i in 1..=5 {
+                tree.new_toplevel(TestRenderElement::with_id(i), &focus);
+            }
+            for i in 1..=5u32 {
+                let pw = tree.path_to_window(&TestRenderElement::with_id(i));
+                assert!(pw.is_some_and(|(p, w)| p == vec![(i as usize) - 1] && w.id == i));
+            }
+        }
     }
 }
