@@ -10,7 +10,7 @@ mod dendrite_tree;
 
 #[derive(Default)]
 pub struct Root {
-    tree: dendrite_tree::DendriteTree,
+    tree: dendrite_tree::DendriteTree<Window>,
     active_window: Vec<usize>,
     is_dirty: bool,
     windows_to_deactivate: Vec<Window>,

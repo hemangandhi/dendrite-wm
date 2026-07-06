@@ -5,7 +5,7 @@ use smithay::wayland::seat::WaylandFocus;
 use smithay::wayland::shell::xdg::ToplevelSurface;
 
 use crate::layout::action::Action;
-use crate::render::RenderData;
+use crate::render::{RenderData, RenderableElement};
 
 #[derive(Default)]
 pub struct FocusSuggestion(Vec<usize>);
@@ -53,14 +53,14 @@ impl Orientation {
     }
 }
 
-pub enum DendriteTree {
+pub enum DendriteTree<W> {
     Leaf {
-        window: Window,
+        window: W,
         // Always in the output frame (so far...)
         geometry: Rectangle<i32, Logical>,
     },
     Container {
-        children: Vec<DendriteTree>,
+        children: Vec<DendriteTree<W>>,
         // Always in the output frame (so far...)
         geometry: Rectangle<i32, Logical>,
         orientation: Orientation,
@@ -68,7 +68,7 @@ pub enum DendriteTree {
     },
 }
 
-impl Default for DendriteTree {
+impl<W> Default for DendriteTree<W> {
     fn default() -> Self {
         Self::Container {
             children: vec![],
@@ -79,7 +79,7 @@ impl Default for DendriteTree {
     }
 }
 
-impl From<Size<i32, Logical>> for DendriteTree {
+impl<W> From<Size<i32, Logical>> for DendriteTree<W> {
     fn from(value: Size<i32, Logical>) -> Self {
         Self::Container {
             children: vec![],
@@ -97,17 +97,8 @@ impl From<Size<i32, Logical>> for DendriteTree {
     }
 }
 
-fn configure_surface_in_size(size: Size<i32, Logical>, surface: ToplevelSurface) -> Window {
-    surface.with_pending_state(|p| {
-        p.bounds = Some(size);
-        p.size = Some(size)
-    });
-    surface.send_pending_configure();
-    return Window::new_wayland_window(surface);
-}
-
-fn delete_child_and_suggest_focus(
-    children: &mut Vec<DendriteTree>,
+fn delete_child_and_suggest_focus<W>(
+    children: &mut Vec<DendriteTree<W>>,
     i: usize,
 ) -> (FocusSuggestion, bool) {
     children.remove(i);
@@ -120,11 +111,11 @@ fn delete_child_and_suggest_focus(
     }
 }
 
-fn scroll_window_into_view(
+fn scroll_window_into_view<W>(
     new_window_geometry: Rectangle<i32, Logical>,
     orientation: Orientation,
     parent_geometry: Rectangle<i32, Logical>,
-    children: &mut [DendriteTree],
+    children: &mut [DendriteTree<W>],
 ) {
     let bump = match orientation {
         Orientation::Horizontal => {
@@ -163,7 +154,37 @@ fn scroll_window_into_view(
     }
 }
 
-impl DendriteTree {
+impl<W> DendriteTree<W> {
+    fn update_position(&mut self, delta: Point<i32, Logical>) {
+        match self {
+            DendriteTree::Leaf { geometry, .. } => geometry.loc += delta,
+            DendriteTree::Container { geometry, .. } => geometry.loc += delta,
+        }
+    }
+
+    fn geometry(&self) -> Rectangle<i32, Logical> {
+        match self {
+            DendriteTree::Leaf { geometry, .. } => *geometry,
+            DendriteTree::Container { geometry, .. } => *geometry,
+        }
+    }
+
+    pub fn window_at_path<'a>(&'a self, path: &[usize]) -> Option<&'a W> {
+        match (self, path) {
+            (DendriteTree::Leaf { window, .. }, []) => Some(window),
+            (DendriteTree::Leaf { .. }, _x) => None,
+            (DendriteTree::Container { children, .. }, [x]) => {
+                children.get(*x).and_then(move |t| t.window_at_path(&[]))
+            }
+            (DendriteTree::Container { children, .. }, [x, xs @ ..]) => {
+                children.get(*x).and_then(move |t| t.window_at_path(xs))
+            }
+            (DendriteTree::Container { .. }, []) => None,
+        }
+    }
+}
+
+impl<W: RenderableElement> DendriteTree<W> {
     fn render_to_space(
         &self,
         active_window: Option<&[usize]>,
@@ -175,11 +196,15 @@ impl DendriteTree {
         match self {
             DendriteTree::Leaf { window, .. } => {
                 if !parent_geometry.overlaps_or_touches(geometry) {
-                    render_data.unmap(window);
+                    window.unmap(render_data);
                 } else {
                     // Note: active windows will never actually have something atop them.
-                    window.override_z_index(30 - layer_num);
-                    render_data.render_or_map(window, geometry.loc, active_window.is_some());
+                    window.render_or_map(
+                        render_data,
+                        geometry.loc,
+                        active_window.is_some(),
+                        30 - layer_num,
+                    );
                 }
             }
             DendriteTree::Container { children, .. } => {
@@ -208,7 +233,7 @@ impl DendriteTree {
         self.render_to_space(active_window, render_data, self.geometry(), 0);
     }
 
-    pub fn new_toplevel(&mut self, surface: ToplevelSurface, focus: &[usize]) {
+    pub fn new_toplevel(&mut self, surface: W::TopLevelSurfaceType, focus: &[usize]) {
         let DendriteTree::Container {
             children,
             orientation,
@@ -229,7 +254,7 @@ impl DendriteTree {
         }
 
         if *is_tabbed {
-            let new_win = configure_surface_in_size(geometry.size, surface);
+            let new_win = W::from_toplevel(geometry.size, surface);
             children.push(DendriteTree::Leaf {
                 window: new_win,
                 geometry: *geometry,
@@ -241,7 +266,7 @@ impl DendriteTree {
             Orientation::Vertical => Size::new(geometry.size.w, geometry.size.h / 2),
             Orientation::Horizontal => Size::new(geometry.size.w / 2, geometry.size.h),
         };
-        let new_win = configure_surface_in_size(new_window_size, surface);
+        let new_win = W::from_toplevel(new_window_size, surface);
 
         let Some(x) = focus.first() else {
             children.push(DendriteTree::Leaf {
@@ -286,41 +311,20 @@ impl DendriteTree {
         }
     }
 
-    fn update_position(&mut self, delta: Point<i32, Logical>) {
-        match self {
-            DendriteTree::Leaf { geometry, .. } => geometry.loc += delta,
-            DendriteTree::Container { geometry, .. } => geometry.loc += delta,
-        }
-    }
-
-    fn geometry(&self) -> Rectangle<i32, Logical> {
-        match self {
-            DendriteTree::Leaf { geometry, .. } => *geometry,
-            DendriteTree::Container { geometry, .. } => *geometry,
-        }
-    }
-
-    pub fn path_to_window<'a>(&'a self, window: &Window) -> Option<(FocusSuggestion, &'a Window)> {
-        match window.wl_surface() {
-            Some(s) => self.path_to_surface(&*s.clone()),
-            None => None,
-        }
+    pub fn path_to_window<'a>(&'a self, window: &W) -> Option<(FocusSuggestion, &'a W)> {
+        window.to_surface().and_then(|s| self.path_to_surface(&s))
     }
 
     pub fn path_to_surface<'a>(
         &'a self,
-        surface: &WlSurface,
-    ) -> Option<(FocusSuggestion, &'a Window)> {
+        surface: &W::SurfaceType,
+    ) -> Option<(FocusSuggestion, &'a W)> {
         match self {
             DendriteTree::Leaf {
                 window: real_window,
                 ..
             } => {
-                return if real_window
-                    .wl_surface()
-                    .map(|s| *s == *surface)
-                    .unwrap_or(false)
-                {
+                return if real_window.contains_surface(surface) {
                     Some((FocusSuggestion::default(), real_window))
                 } else {
                     None
@@ -338,28 +342,10 @@ impl DendriteTree {
         };
     }
 
-    pub fn window_at_path<'a>(&'a self, path: &[usize]) -> Option<&'a Window> {
-        match (self, path) {
-            (DendriteTree::Leaf { window, .. }, []) => Some(window),
-            (DendriteTree::Leaf { .. }, _x) => None,
-            (DendriteTree::Container { children, .. }, [x]) => {
-                children.get(*x).and_then(move |t| t.window_at_path(&[]))
-            }
-            (DendriteTree::Container { children, .. }, [x, xs @ ..]) => {
-                children.get(*x).and_then(move |t| t.window_at_path(xs))
-            }
-            (DendriteTree::Container { .. }, []) => None,
-        }
-    }
-
     fn send_close(&self) {
         match self {
             DendriteTree::Leaf { window, .. } => {
-                if let Some(tl) = window.toplevel() {
-                    tl.send_close();
-                } else {
-                    tracing::warn!("Couldn't get toplevel for window.");
-                }
+                window.send_close();
             }
             DendriteTree::Container { children, .. } => {
                 for c in children {
@@ -494,7 +480,7 @@ impl DendriteTree {
             children,
         );
 
-        let mut child: &mut DendriteTree = &mut children[new_child_index as usize];
+        let mut child: &mut DendriteTree<W> = &mut children[new_child_index as usize];
         while let DendriteTree::Container {
             children: grandchildren,
             orientation: child_orientation,
@@ -593,5 +579,29 @@ impl DendriteTree {
             // TODO: scale children?
             DendriteTree::Container { geometry, .. } => geometry.size = new_size,
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::DendriteTree;
+    use crate::render::test_render::TestRenderElement;
+
+    #[test]
+    fn test_new_toplevel() {
+        let mut tree = DendriteTree::<TestRenderElement>::default();
+        let focus = vec![];
+        let win = TestRenderElement::with_id(1);
+        tree.new_toplevel(win, focus.as_ref());
+        let DendriteTree::Container { children, .. } = tree else {
+            assert!(false);
+            return;
+        };
+        assert_eq!(children.len(), 1);
+        let DendriteTree::Leaf { window, .. } = &children[0] else {
+            assert!(false);
+            return;
+        };
+        assert_eq!(window.id, 1);
     }
 }
