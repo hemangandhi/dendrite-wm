@@ -196,10 +196,10 @@ impl<W> DendriteTree<W> {
 }
 
 impl<W: RenderableElement> DendriteTree<W> {
-    fn render_to_space(
+    fn render_to_space<'a>(
         &self,
         active_window: Option<&[usize]>,
-        render_data: &mut RenderData,
+        render_data: &mut W::Renderer<'a>,
         parent_geometry: Rectangle<i32, Logical>,
         layer_num: u8,
     ) {
@@ -236,10 +236,10 @@ impl<W: RenderableElement> DendriteTree<W> {
         }
     }
 
-    pub fn render_to_space_root(
+    pub fn render_to_space_root<'a>(
         &self,
         active_window: Option<&[usize]>,
-        render_data: &mut RenderData,
+        render_data: &mut W::Renderer<'a>,
     ) {
         self.render_to_space(active_window, render_data, self.geometry(), 0);
     }
@@ -610,8 +610,8 @@ mod test {
 
     mod one_layer {
         use super::super::DendriteTree;
-        use crate::render::test_render::TestRenderElement;
-        use smithay::utils::Size;
+        use crate::render::test_render::{RenderRecord, TestRenderElement};
+        use smithay::utils::{Point, Size};
 
         #[test]
         fn test_many_spawns() {
@@ -665,6 +665,143 @@ mod test {
                 let pw = tree.path_to_window(&TestRenderElement::with_id(i));
                 assert!(pw.is_some_and(|(p, w)| p == vec![(i as usize) - 1] && w.id == i));
             }
+        }
+
+        #[test]
+        fn test_render() {
+            let mut tree = DendriteTree::<TestRenderElement>::default();
+            tree.resize_output(Size::new(256, 256));
+            let mut focus = vec![];
+            for i in 1..=5 {
+                tree.new_toplevel(TestRenderElement::with_id(i), &focus);
+                // Push focus right
+                if focus.is_empty() {
+                    focus.push(0);
+                } else {
+                    tree.handle_move_focus(
+                        &mut focus,
+                        0,
+                        crate::layout::action::Action::MoveFocusRight,
+                    );
+                    assert_eq!(focus, vec![(i - 1) as usize]);
+                }
+            }
+            for i in 1..5 {
+                tree.handle_move_focus(&mut focus, 0, crate::layout::action::Action::MoveFocusLeft);
+                assert_eq!(focus, vec![(4 - i) as usize]);
+            }
+            println!("PETRA!! Focus: {:?}", focus);
+            let mut renders: Vec<Vec<RenderRecord>> = vec![];
+            for i in 1..5 {
+                tree.render_to_space_root(Some(&focus), renders.push_mut(vec![]));
+                tree.handle_move_focus(
+                    &mut focus,
+                    0,
+                    crate::layout::action::Action::MoveFocusRight,
+                );
+                assert_eq!(focus, vec![i]);
+            }
+            let expected_renders = vec![
+                vec![
+                    RenderRecord::Rendered {
+                        id: 1,
+                        coords: Point::new(0, 0),
+                        active: true,
+                        z_index: 29,
+                    },
+                    RenderRecord::Rendered {
+                        id: 2,
+                        coords: Point::new(128, 0),
+                        active: false,
+                        z_index: 29,
+                    },
+                    RenderRecord::Rendered {
+                        id: 3,
+                        coords: Point::new(256, 0),
+                        active: false,
+                        z_index: 29,
+                    },
+                    RenderRecord::Unmapped(4),
+                    RenderRecord::Unmapped(5),
+                ],
+                vec![
+                    RenderRecord::Rendered {
+                        id: 1,
+                        coords: Point::new(0, 0),
+                        active: false,
+                        z_index: 29,
+                    },
+                    RenderRecord::Rendered {
+                        id: 2,
+                        coords: Point::new(128, 0),
+                        active: true,
+                        z_index: 29,
+                    },
+                    RenderRecord::Rendered {
+                        id: 3,
+                        coords: Point::new(256, 0),
+                        active: false,
+                        z_index: 29,
+                    },
+                    RenderRecord::Unmapped(4),
+                    RenderRecord::Unmapped(5),
+                ],
+                vec![
+                    RenderRecord::Rendered {
+                        id: 1,
+                        coords: Point::new(-128, 0),
+                        active: false,
+                        z_index: 29,
+                    },
+                    RenderRecord::Rendered {
+                        id: 2,
+                        coords: Point::new(0, 0),
+                        active: false,
+                        z_index: 29,
+                    },
+                    RenderRecord::Rendered {
+                        id: 3,
+                        coords: Point::new(128, 0),
+                        active: true,
+                        z_index: 29,
+                    },
+                    RenderRecord::Rendered {
+                        id: 4,
+                        coords: Point::new(256, 0),
+                        active: false,
+                        z_index: 29,
+                    },
+                    RenderRecord::Unmapped(5),
+                ],
+                vec![
+                    RenderRecord::Unmapped(1),
+                    RenderRecord::Rendered {
+                        id: 2,
+                        coords: Point::new(-128, 0),
+                        active: false,
+                        z_index: 29,
+                    },
+                    RenderRecord::Rendered {
+                        id: 3,
+                        coords: Point::new(0, 0),
+                        active: false,
+                        z_index: 29,
+                    },
+                    RenderRecord::Rendered {
+                        id: 4,
+                        coords: Point::new(128, 0),
+                        active: true,
+                        z_index: 29,
+                    },
+                    RenderRecord::Rendered {
+                        id: 5,
+                        coords: Point::new(256, 0),
+                        active: false,
+                        z_index: 29,
+                    },
+                ],
+            ];
+            assert_eq!(expected_renders, renders);
         }
     }
 }

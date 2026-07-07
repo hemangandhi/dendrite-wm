@@ -52,12 +52,15 @@ impl<'a> RenderData<'a> {
 pub trait RenderableElement {
     type SurfaceType;
     type TopLevelSurfaceType;
+    type Renderer<'a>
+    where
+        Self: 'a;
 
     fn send_close(&self);
-    fn unmap<'a>(&self, renderer: &mut RenderData<'a>);
+    fn unmap<'a>(&self, renderer: &mut Self::Renderer<'a>);
     fn render_or_map<'a>(
         &self,
-        renderer: &mut RenderData<'a>,
+        renderer: &mut Self::Renderer<'a>,
         coords: Point<i32, Logical>,
         active: bool,
         z_index: u8,
@@ -72,6 +75,7 @@ pub trait RenderableElement {
 impl RenderableElement for Window {
     type SurfaceType = smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
     type TopLevelSurfaceType = smithay::wayland::shell::xdg::ToplevelSurface;
+    type Renderer<'a> = RenderData<'a>;
 
     fn send_close(&self) {
         if let Some(tl) = self.toplevel() {
@@ -128,19 +132,21 @@ pub mod test_render {
 
     use smithay::utils::{Logical, Point, Size};
 
-    #[derive(Clone, Default, Eq, PartialEq, Debug)]
-    pub struct MappingData {
-        pub coords: Point<i32, Logical>,
-        pub active: bool,
-        pub z_index: u8,
+    #[derive(Clone, Eq, PartialEq, Debug)]
+    pub enum RenderRecord {
+        Unmapped(u32),
+        Rendered {
+            id: u32,
+            coords: Point<i32, Logical>,
+            active: bool,
+            z_index: u8,
+        },
     }
 
     #[derive(Clone, Default, Eq, PartialEq, Debug)]
     pub struct TestRenderElement {
         pub id: u32,
         pub got_close: RefCell<bool>,
-        pub was_unmapped: RefCell<bool>,
-        pub mapped_locs: RefCell<Vec<MappingData>>,
         pub size: Size<i32, Logical>,
     }
 
@@ -156,23 +162,28 @@ pub mod test_render {
     impl super::RenderableElement for TestRenderElement {
         type SurfaceType = Self;
         type TopLevelSurfaceType = Self;
+        type Renderer<'a>
+            = Vec<RenderRecord>
+        where
+            Self: 'a;
 
         fn send_close(&self) {
             self.got_close.swap(&true.into());
         }
 
-        fn unmap<'a>(&self, _renderer: &mut super::RenderData<'a>) {
-            self.was_unmapped.swap(&true.into());
+        fn unmap<'a>(&self, renderer: &mut Vec<RenderRecord>) {
+            renderer.push(RenderRecord::Unmapped(self.id));
         }
 
         fn render_or_map<'a>(
             &self,
-            _renderer: &mut super::RenderData<'a>,
+            renderer: &mut Vec<RenderRecord>,
             coords: Point<i32, Logical>,
             active: bool,
             z_index: u8,
         ) {
-            self.mapped_locs.borrow_mut().push(MappingData {
+            renderer.push(RenderRecord::Rendered {
+                id: self.id,
                 coords,
                 active,
                 z_index,
