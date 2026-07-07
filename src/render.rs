@@ -63,7 +63,6 @@ pub trait RenderableElement {
         z_index: u8,
     );
     fn contains_surface(&self, s: &Self::SurfaceType) -> bool;
-    fn matches(&self, other: &Self) -> bool;
 
     fn from_toplevel(size: Size<i32, Logical>, t: Self::TopLevelSurfaceType) -> Self;
 
@@ -107,13 +106,6 @@ impl RenderableElement for Window {
 
     fn contains_surface(&self, other: &Self::SurfaceType) -> bool {
         self.wl_surface().map(|s| *s == *other).unwrap_or(false)
-    }
-
-    fn matches(&self, other: &Self) -> bool {
-        other
-            .wl_surface()
-            .map(|s| self.contains_surface(&*s))
-            .unwrap_or(false)
     }
 
     fn from_toplevel(size: Size<i32, Logical>, surface: Self::TopLevelSurfaceType) -> Self {
@@ -189,10 +181,6 @@ pub mod test_render {
 
         fn contains_surface(&self, s: &Self::SurfaceType) -> bool {
             self.id == s.id
-        }
-
-        fn matches(&self, other: &Self) -> bool {
-            self.id == other.id
         }
 
         fn from_toplevel(size: Size<i32, Logical>, t: Self::TopLevelSurfaceType) -> Self {
