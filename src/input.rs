@@ -6,15 +6,15 @@ use std::thread;
 
 use smithay::{
     backend::input::{
-        AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, InputEvent,
-        KeyState, KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent,
+        AbsolutePositionEvent, Axis, AxisSource, Event, InputBackend, InputEvent, KeyboardKeyEvent,
+        PointerAxisEvent, PointerButtonEvent,
     },
     input::{
-        keyboard::{FilterResult, Keysym},
+        keyboard::FilterResult,
         pointer::{AxisFrame, ButtonEvent, MotionEvent},
     },
     utils::SERIAL_COUNTER,
-    wayland::{seat::WaylandFocus, xdg_activation::XdgActivationToken},
+    wayland::xdg_activation::XdgActivationToken,
 };
 
 use crate::layout::action::Action;
@@ -23,56 +23,32 @@ use crate::state::DendriteState;
 impl DendriteState {
     pub fn process_input_event<I: InputBackend>(&mut self, event: InputEvent<I>) {
         match event {
-            InputEvent::Keyboard { event, .. } => {
+            InputEvent::Keyboard {
+                event: ref key_event,
+                ..
+            } => {
                 let serial = SERIAL_COUNTER.next_serial();
-                let time = Event::time_msec(&event);
+                let time = Event::time_msec(key_event);
 
                 self.seat.get_keyboard().unwrap().input::<(), _>(
                     self,
-                    event.key_code(),
-                    event.state(),
+                    key_event.key_code(),
+                    key_event.state(),
                     serial,
                     time,
                     |this, mods, keysym| {
-                        let pressed = event.state() == KeyState::Pressed;
-                        if !pressed || !mods.alt {
+                        let Some(action) = Action::from_key_event(&event, mods, keysym) else {
                             return FilterResult::Forward;
+                        };
+
+                        if let Action::Spawn = action {
+                            let (token, _) = this.xdg_activation_state.create_external_token(None);
+                            spawn_sync("contour", Some(token.clone()));
+                        } else {
+                            this.layout.handle_action(action);
                         }
 
-                        match keysym.raw_latin_sym_or_raw_current_sym() {
-                            Some(Keysym::Return) => {
-                                let (token, _) =
-                                    this.xdg_activation_state.create_external_token(None);
-                                spawn_sync("contour", Some(token.clone()));
-
-                                return FilterResult::Intercept(());
-                            }
-                            Some(Keysym::q) => {
-                                this.layout.handle_action(Action::CloseWindow);
-                                return FilterResult::Intercept(());
-                            }
-                            Some(Keysym::h) => {
-                                this.layout.handle_action(Action::MoveFocusLeft);
-                                return FilterResult::Intercept(());
-                            }
-                            Some(Keysym::j) => {
-                                this.layout.handle_action(Action::MoveFocusDown);
-                                return FilterResult::Intercept(());
-                            }
-                            Some(Keysym::k) => {
-                                this.layout.handle_action(Action::MoveFocusUp);
-                                return FilterResult::Intercept(());
-                            }
-                            Some(Keysym::l) => {
-                                this.layout.handle_action(Action::MoveFocusRight);
-                                return FilterResult::Intercept(());
-                            }
-                            Some(Keysym::semicolon) => {
-                                this.layout.handle_action(Action::MakeInnerTree);
-                                return FilterResult::Intercept(());
-                            }
-                            _ => return FilterResult::Forward,
-                        };
+                        return FilterResult::Intercept(());
                     },
                 );
             }
@@ -193,7 +169,7 @@ fn spawn_sync<T: AsRef<OsStr> + Send + 'static>(command: T, token: Option<XdgAct
                 }
                 Err(e) => {
                     let command_str = command.as_ref().to_str();
-                    tracing::warn!("Spawn for {command_str:?} failed.");
+                    tracing::warn!("Spawn for {command_str:?} failed: {e:?}");
                 }
             }
         });

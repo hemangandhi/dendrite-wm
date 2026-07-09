@@ -1,7 +1,7 @@
 use smithay::utils::{Logical, Point, Rectangle, Size};
 
-use crate::layout::action::Action;
-use crate::render::{RenderData, RenderableElement};
+use crate::layout::action::{Action, Direction};
+use crate::render::RenderableElement;
 
 #[derive(Default, Debug)]
 pub struct FocusSuggestion(Vec<usize>);
@@ -428,8 +428,8 @@ impl<W: RenderableElement> DendriteTree<W> {
         &mut self,
         focus: &mut Vec<usize>,
         index: usize,
-        mut action: Action,
-    ) -> Option<(Action, Point<i32, Logical>)> {
+        mut direction: Direction,
+    ) -> Option<(Direction, Point<i32, Logical>)> {
         let DendriteTree::Container {
             children,
             orientation,
@@ -450,33 +450,31 @@ impl<W: RenderableElement> DendriteTree<W> {
         let mut moved_up = false;
         if index < focus.len() - 1 {
             let Some((residual_action, inner_suggested_point)) =
-                children[focus[index]].handle_move_focus(focus, index + 1, action)
+                children[focus[index]].handle_move_focus(focus, index + 1, direction)
             else {
                 return None;
             };
-            action = residual_action;
+            direction = residual_action;
             suggested_point = inner_suggested_point;
             moved_up = true;
         }
 
-        let child_index_offset: isize = match (action, *orientation) {
-            (Action::MoveFocusUp | Action::MoveFocusDown, Orientation::Horizontal) => {
-                return Some((action, suggested_point));
+        let child_index_offset: isize = match (direction, *orientation) {
+            (Direction::Up | Direction::Down, Orientation::Horizontal) => {
+                return Some((direction, suggested_point));
             }
-            (Action::MoveFocusUp, Orientation::Vertical) => -1,
-            (Action::MoveFocusDown, Orientation::Vertical) => 1,
-            (Action::MoveFocusLeft | Action::MoveFocusRight, Orientation::Vertical) => {
-                return Some((action, suggested_point));
+            (Direction::Up, Orientation::Vertical) => -1,
+            (Direction::Down, Orientation::Vertical) => 1,
+            (Direction::Left | Direction::Right, Orientation::Vertical) => {
+                return Some((direction, suggested_point));
             }
-            (Action::MoveFocusLeft, Orientation::Horizontal) => -1,
-            (Action::MoveFocusRight, Orientation::Horizontal) => 1,
-            // TODO: panic instead? Or be smarter about types here?
-            _ => return Some((action, suggested_point)),
+            (Direction::Left, Orientation::Horizontal) => -1,
+            (Direction::Right, Orientation::Horizontal) => 1,
         };
 
         let new_child_index = (focus[index] as isize) + child_index_offset;
         if new_child_index < 0 || new_child_index >= (children.len() as isize) {
-            return Some((action, suggested_point));
+            return Some((direction, suggested_point));
         }
 
         if moved_up {
@@ -569,10 +567,12 @@ impl<W: RenderableElement> DendriteTree<W> {
     pub fn handle_action(&mut self, focus: &mut Vec<usize>, action: Action) -> Option<Action> {
         tracing::info!("Handle {action:?} at {focus:?}");
         match action {
-            Action::MoveFocusUp
-            | Action::MoveFocusDown
-            | Action::MoveFocusLeft
-            | Action::MoveFocusRight => self.handle_move_focus(focus, 0, action).map(|(a, _i)| a),
+            Action::MoveFocus(d @ Direction::Up)
+            | Action::MoveFocus(d @ Direction::Down)
+            | Action::MoveFocus(d @ Direction::Left)
+            | Action::MoveFocus(d @ Direction::Right) => self
+                .handle_move_focus(focus, 0, d)
+                .map(|(d, _i)| Action::MoveFocus(d)),
             Action::MakeInnerTree => {
                 self.make_inner_tree(focus, 0);
                 None
@@ -581,6 +581,8 @@ impl<W: RenderableElement> DendriteTree<W> {
                 let _ = std::mem::replace(focus, self.toplevel_destroyed(&focus).0.into());
                 None
             }
+            // TODO: make the types make this impossible
+            Action::Spawn => Some(Action::Spawn),
         }
     }
 }
@@ -610,6 +612,7 @@ mod test {
 
     mod one_layer {
         use super::super::DendriteTree;
+        use crate::layout::action::Direction;
         use crate::render::test_render::{RenderRecord, TestRenderElement};
         use smithay::utils::{Point, Size};
 
@@ -644,11 +647,7 @@ mod test {
             // Needs focus to actually be set.
             focus.push(0);
             for i in 1..5 {
-                tree.handle_move_focus(
-                    &mut focus,
-                    0,
-                    crate::layout::action::Action::MoveFocusRight,
-                );
+                tree.handle_move_focus(&mut focus, 0, Direction::Right);
                 assert_eq!(focus, vec![i]);
             }
         }
@@ -678,27 +677,19 @@ mod test {
                 if focus.is_empty() {
                     focus.push(0);
                 } else {
-                    tree.handle_move_focus(
-                        &mut focus,
-                        0,
-                        crate::layout::action::Action::MoveFocusRight,
-                    );
+                    tree.handle_move_focus(&mut focus, 0, Direction::Right);
                     assert_eq!(focus, vec![(i - 1) as usize]);
                 }
             }
             for i in 1..5 {
-                tree.handle_move_focus(&mut focus, 0, crate::layout::action::Action::MoveFocusLeft);
+                tree.handle_move_focus(&mut focus, 0, Direction::Left);
                 assert_eq!(focus, vec![(4 - i) as usize]);
             }
             println!("PETRA!! Focus: {:?}", focus);
             let mut renders: Vec<Vec<RenderRecord>> = vec![];
             for i in 1..5 {
                 tree.render_to_space_root(Some(&focus), renders.push_mut(vec![]));
-                tree.handle_move_focus(
-                    &mut focus,
-                    0,
-                    crate::layout::action::Action::MoveFocusRight,
-                );
+                tree.handle_move_focus(&mut focus, 0, Direction::Right);
                 assert_eq!(focus, vec![i]);
             }
             let expected_renders = vec![
