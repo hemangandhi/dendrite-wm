@@ -685,7 +685,6 @@ mod test {
                 tree.handle_move_focus(&mut focus, 0, Direction::Left);
                 assert_eq!(focus, vec![(4 - i) as usize]);
             }
-            println!("PETRA!! Focus: {:?}", focus);
             let mut renders: Vec<Vec<RenderRecord>> = vec![];
             for i in 1..5 {
                 tree.render_to_space_root(Some(&focus), renders.push_mut(vec![]));
@@ -793,6 +792,97 @@ mod test {
                 ],
             ];
             assert_eq!(expected_renders, renders);
+        }
+    }
+
+    mod many_layers {
+        use super::super::DendriteTree;
+        use crate::layout::action::Action;
+        use crate::layout::action::Direction;
+        use crate::render::test_render::{RenderRecord, TestRenderElement};
+
+        use smithay::utils::{Point, Size};
+
+        enum TestAction<'a> {
+            Act(Action),
+            Spawn(u32),
+            Render(&'a mut Vec<RenderRecord>),
+        }
+
+        fn run_actions(
+            actions: &mut [TestAction],
+        ) -> (DendriteTree<TestRenderElement>, Vec<usize>) {
+            let mut tree = DendriteTree::<TestRenderElement>::default();
+            tree.resize_output(Size::new(256, 256));
+            let mut focus = vec![];
+            for action in actions {
+                match action {
+                    TestAction::Act(a) => {
+                        tree.handle_action(&mut focus, *a);
+                    }
+                    TestAction::Spawn(i) => {
+                        tree.new_toplevel(TestRenderElement::with_id(*i), &focus);
+                        focus = tree
+                            .path_to_surface(&TestRenderElement::with_id(*i))
+                            .unwrap()
+                            .0
+                            .into()
+                    }
+                    TestAction::Render(r) => {
+                        tree.render_to_space_root(Some(&focus), r);
+                    }
+                };
+            }
+            (tree, focus)
+        }
+
+        #[test]
+        fn test_tree_spawn() {
+            let mut renders = vec![];
+            let (_tree, focus) = run_actions(&mut [
+                TestAction::Spawn(0),
+                TestAction::Spawn(1),
+                TestAction::Act(Action::MakeInnerTree),
+                TestAction::Spawn(2),
+                TestAction::Act(Action::MakeInnerTree),
+                TestAction::Spawn(3),
+                TestAction::Spawn(4),
+                TestAction::Render(renders.push_mut(vec![])),
+            ]);
+            assert_eq!(focus, vec![1, 1, 2]);
+            let expected_renders = vec![vec![
+                RenderRecord::Rendered {
+                    id: 0,
+                    coords: Point::new(0, 0),
+                    active: false,
+                    z_index: 29,
+                },
+                RenderRecord::Rendered {
+                    id: 1,
+                    coords: Point::new(128, -128),
+                    active: false,
+                    z_index: 28,
+                },
+                RenderRecord::Rendered {
+                    id: 2,
+                    coords: Point::new(0, 128),
+                    active: false,
+                    z_index: 27,
+                },
+                RenderRecord::Rendered {
+                    id: 3,
+                    coords: Point::new(128, 128),
+                    active: false,
+                    z_index: 27,
+                },
+                RenderRecord::Rendered {
+                    id: 4,
+                    coords: Point::new(128 + 64, 128),
+                    active: true,
+                    z_index: 27,
+                },
+            ]];
+            assert_eq!(renders, expected_renders);
         }
     }
 }
