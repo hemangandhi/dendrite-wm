@@ -28,10 +28,6 @@ impl FocusSuggestion {
     fn push(&mut self, i: usize) {
         self.0.push(i);
     }
-
-    fn singleton(x: usize) -> Self {
-        Self(vec![x])
-    }
 }
 
 #[derive(Copy, Clone, PartialEq)]
@@ -50,6 +46,7 @@ impl Orientation {
 }
 
 pub enum DendriteTree<W> {
+    Empty(Size<i32, Logical>),
     Leaf {
         window: W,
         // Always in the output frame (so far...)
@@ -61,50 +58,35 @@ pub enum DendriteTree<W> {
         geometry: Rectangle<i32, Logical>,
         orientation: Orientation,
         is_tabbed: bool,
+        last_focus: usize,
     },
 }
 
 impl<W> Default for DendriteTree<W> {
     fn default() -> Self {
-        Self::Container {
-            children: vec![],
-            geometry: Default::default(),
-            orientation: Orientation::Horizontal,
-            is_tabbed: false,
-        }
+        Self::Empty(Size::default())
     }
 }
 
 impl<W> From<Size<i32, Logical>> for DendriteTree<W> {
     fn from(value: Size<i32, Logical>) -> Self {
-        Self::Container {
-            children: vec![],
-            geometry: Rectangle {
-                loc: Point::new(0, 0),
-                size: value,
-            },
-            orientation: if value.w >= value.h {
-                Orientation::Horizontal
-            } else {
-                Orientation::Vertical
-            },
-            is_tabbed: false,
-        }
+        Self::Empty(value)
     }
 }
 
 fn delete_child_and_suggest_focus<W>(
     children: &mut Vec<DendriteTree<W>>,
     i: usize,
-) -> (FocusSuggestion, bool) {
+    new_focus: &mut Vec<usize>,
+) -> bool {
     children.remove(i);
     if children.is_empty() {
-        (FocusSuggestion::default(), true)
-    } else if i != 0 {
-        (FocusSuggestion::singleton(i - 1), false)
-    } else {
-        (FocusSuggestion::singleton(0), false)
+        return true;
     }
+    let index = if i != 0 { i - 1 } else { 0 };
+    new_focus.push(index);
+    children[index].deepen_focus_from_last(new_focus);
+    return false;
 }
 
 fn scroll_window_into_view<W>(
@@ -162,6 +144,7 @@ impl<W> DendriteTree<W> {
                 }
                 geometry.loc += delta
             }
+            DendriteTree::Empty(_) => {}
         }
     }
 
@@ -169,6 +152,10 @@ impl<W> DendriteTree<W> {
         match self {
             DendriteTree::Leaf { geometry, .. } => *geometry,
             DendriteTree::Container { geometry, .. } => *geometry,
+            DendriteTree::Empty(s) => Rectangle {
+                loc: Point::new(0, 0),
+                size: *s,
+            },
         }
     }
 
@@ -183,6 +170,7 @@ impl<W> DendriteTree<W> {
                 children.get(*x).and_then(move |t| t.window_at_path(xs))
             }
             (DendriteTree::Container { .. }, []) => None,
+            (DendriteTree::Empty(..), _) => None,
         }
     }
 
@@ -191,6 +179,45 @@ impl<W> DendriteTree<W> {
             DendriteTree::Leaf { geometry, .. } => geometry.size = new_size,
             // TODO: scale children?
             DendriteTree::Container { geometry, .. } => geometry.size = new_size,
+            DendriteTree::Empty(s) => *s = new_size,
+        }
+    }
+
+    pub fn apply_focus(&mut self, mut focus: &[usize]) {
+        let mut node = self;
+        while let (
+            DendriteTree::Container {
+                children,
+                last_focus,
+                ..
+            },
+            [i, new_focus @ ..],
+        ) = (node, focus)
+        {
+            *last_focus = *i;
+            node = &mut children[*i];
+            focus = new_focus;
+        }
+    }
+
+    fn deepen_focus_from_last(&mut self, focus: &mut Vec<usize>) {
+        let mut child: &mut DendriteTree<W> = self;
+        while let DendriteTree::Container {
+            children: grandchildren,
+            orientation: child_orientation,
+            geometry: child_geometry,
+            last_focus: grandchild_index,
+            ..
+        } = child
+        {
+            scroll_window_into_view(
+                grandchildren[*grandchild_index].geometry(),
+                *child_orientation,
+                *child_geometry,
+                grandchildren,
+            );
+            child = &mut grandchildren[*grandchild_index];
+            focus.push(*grandchild_index);
         }
     }
 }
@@ -233,6 +260,7 @@ impl<W: RenderableElement> DendriteTree<W> {
                     // TODO: we may have to raise any windows at our level since the space behaves that way.
                 }
             }
+            _ => {}
         }
     }
 
@@ -245,6 +273,22 @@ impl<W: RenderableElement> DendriteTree<W> {
     }
 
     pub fn new_toplevel(&mut self, surface: W::TopLevelSurfaceType, focus: &[usize]) {
+        if let DendriteTree::Empty(s) = self {
+            *self = DendriteTree::Container {
+                children: vec![],
+                geometry: Rectangle {
+                    loc: Point::new(0, 0),
+                    size: *s,
+                },
+                orientation: if s.w <= s.h {
+                    Orientation::Horizontal
+                } else {
+                    Orientation::Vertical
+                },
+                is_tabbed: false,
+                last_focus: 0,
+            }
+        }
         let DendriteTree::Container {
             children,
             orientation,
@@ -350,6 +394,7 @@ impl<W: RenderableElement> DendriteTree<W> {
                 }
                 return None;
             }
+            DendriteTree::Empty(..) => return None,
         };
     }
 
@@ -363,11 +408,12 @@ impl<W: RenderableElement> DendriteTree<W> {
                     c.send_close()
                 }
             }
+            _ => {}
         }
     }
 
-    pub fn toplevel_destroyed(&mut self, path: &[usize]) -> (FocusSuggestion, bool) {
-        tracing::info!("Destroying {path:?}");
+    fn toplevel_destroyed_helper(&mut self, focus: &mut Vec<usize>, index: usize) -> bool {
+        tracing::info!("Destroying {focus:?}");
         let DendriteTree::Container {
             children,
             orientation,
@@ -376,52 +422,55 @@ impl<W: RenderableElement> DendriteTree<W> {
         } = self
         else {
             tracing::warn!("toplevel_destroyed called on a leaf!");
-            return (FocusSuggestion::default(), false);
+            return false;
         };
 
-        if let [x, xs @ ..] = path
-            && !xs.is_empty()
-        {
-            let (mut focus_recommendation, delete_child) = children[*x].toplevel_destroyed(xs);
+        if index < focus.len() - 1 {
+            let child_index = focus[index];
+            let delete_child = children[child_index].toplevel_destroyed_helper(focus, index + 1);
             if !delete_child {
-                focus_recommendation.push(*x);
-                return (focus_recommendation, false);
+                return false;
             }
-            return delete_child_and_suggest_focus(children, *x);
+            focus.truncate(index);
+            return delete_child_and_suggest_focus(children, child_index, focus);
         }
 
-        let [i] = path else {
+        let Some(i) = focus.pop() else {
             tracing::warn!("toplevel_destroyed called with empty path?");
-            return (FocusSuggestion::default(), false);
+            return false;
         };
 
-        children[*i].send_close();
+        children[i].send_close();
 
-        let offset_direction = if *i == children.len() - 1 { 1 } else { -1 };
+        let offset_direction = if i == children.len() - 1 { 1 } else { -1 };
         let offset = match orientation {
             Orientation::Vertical => {
-                Point::new(0, offset_direction * children[*i].geometry().size.h)
+                Point::new(0, offset_direction * children[i].geometry().size.h)
             }
             Orientation::Horizontal => {
-                Point::new(offset_direction * children[*i].geometry().size.w, 0)
+                Point::new(offset_direction * children[i].geometry().size.w, 0)
             }
         };
 
-        let new_focus = delete_child_and_suggest_focus(children, *i);
+        let new_focus = delete_child_and_suggest_focus(children, i, focus);
         if *is_tabbed {
             return new_focus;
         }
 
-        if *i == children.len() {
+        if i == children.len() {
             for child in children {
                 child.update_position(offset);
             }
         } else {
-            for child in children.iter_mut().skip(*i) {
+            for child in children.iter_mut().skip(i) {
                 child.update_position(offset);
             }
         }
         return new_focus;
+    }
+
+    pub fn toplevel_destroyed(&mut self, focus: &mut Vec<usize>) -> bool {
+        self.toplevel_destroyed_helper(focus, 0)
     }
 
     fn handle_move_focus(
@@ -434,10 +483,13 @@ impl<W: RenderableElement> DendriteTree<W> {
             children,
             orientation,
             geometry,
+            last_focus,
             ..
         } = self
         else {
-            tracing::warn!("Invalid move of focus on leaf! Focus {focus:?}, index {index:?}");
+            tracing::warn!(
+                "Invalid move of focus on leaf or empty! Focus {focus:?}, index {index:?}"
+            );
             return None;
         };
 
@@ -482,44 +534,15 @@ impl<W: RenderableElement> DendriteTree<W> {
         }
 
         focus[index] = new_child_index as usize;
+        *last_focus = new_child_index as usize;
+
         scroll_window_into_view(
             children[new_child_index as usize].geometry(),
             *orientation,
             *geometry,
             children,
         );
-
-        let mut child: &mut DendriteTree<W> = &mut children[new_child_index as usize];
-        while let DendriteTree::Container {
-            children: grandchildren,
-            orientation: child_orientation,
-            geometry: child_geometry,
-            ..
-        } = child
-        {
-            let (new_child_geometry, i) = {
-                let Some((i, closest)) =
-                    grandchildren.iter_mut().enumerate().min_by_key(|(_i, w)| {
-                        let Point { x: x1, y: y1, .. } = w.geometry().loc;
-                        let Point { x: x2, y: y2, .. } = suggested_point;
-                        (x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2)
-                    })
-                else {
-                    tracing::warn!("Focussing into an empty tree node?");
-                    break;
-                };
-                focus.push(i);
-                let size = closest.geometry();
-                (size, i)
-            };
-            scroll_window_into_view(
-                new_child_geometry,
-                *child_orientation,
-                *child_geometry,
-                grandchildren,
-            );
-            child = &mut grandchildren[i];
-        }
+        children[new_child_index as usize].deepen_focus_from_last(focus);
         return None;
     }
 
@@ -550,6 +573,7 @@ impl<W: RenderableElement> DendriteTree<W> {
             geometry: children[i].geometry(),
             orientation: orientation.perpendicular(),
             is_tabbed: false,
+            last_focus: 0,
         };
         std::mem::swap(&mut new_tree, &mut children[i]);
         let DendriteTree::Container {
@@ -578,7 +602,7 @@ impl<W: RenderableElement> DendriteTree<W> {
                 None
             }
             Action::CloseWindow => {
-                let _ = std::mem::replace(focus, self.toplevel_destroyed(&focus).0.into());
+                let _ = self.toplevel_destroyed(focus);
                 None
             }
             // TODO: make the types make this impossible
@@ -632,7 +656,7 @@ mod test {
             assert!(children.iter().enumerate().all(|(i, w)| match w {
                 DendriteTree::Leaf { window, .. } =>
                     window.id == ((i + 1) as u32) && window.size == Size::new(128, 256),
-                DendriteTree::Container { .. } => false,
+                _ => false,
             }));
         }
 
@@ -809,12 +833,11 @@ mod test {
             Render(&'a mut Vec<RenderRecord>),
         }
 
-        fn run_actions(
+        fn run_actions_from_state(
             actions: &mut [TestAction],
-        ) -> (DendriteTree<TestRenderElement>, Vec<usize>) {
-            let mut tree = DendriteTree::<TestRenderElement>::default();
-            tree.resize_output(Size::new(256, 256));
-            let mut focus = vec![];
+            tree: &mut DendriteTree<TestRenderElement>,
+            mut focus: &mut Vec<usize>,
+        ) {
             for action in actions {
                 match action {
                     TestAction::Act(a) => {
@@ -822,7 +845,7 @@ mod test {
                     }
                     TestAction::Spawn(i) => {
                         tree.new_toplevel(TestRenderElement::with_id(*i), &focus);
-                        focus = tree
+                        *focus = tree
                             .path_to_surface(&TestRenderElement::with_id(*i))
                             .unwrap()
                             .0
@@ -833,6 +856,15 @@ mod test {
                     }
                 };
             }
+        }
+
+        fn run_actions(
+            actions: &mut [TestAction],
+        ) -> (DendriteTree<TestRenderElement>, Vec<usize>) {
+            let mut tree = DendriteTree::<TestRenderElement>::default();
+            tree.resize_output(Size::new(256, 256));
+            let mut focus = vec![];
+            run_actions_from_state(actions, &mut tree, &mut focus);
             (tree, focus)
         }
 
@@ -883,6 +915,27 @@ mod test {
                 },
             ]];
             assert_eq!(renders, expected_renders);
+        }
+
+        #[test]
+        fn test_tree_kills() {
+            let (mut tree, mut focus) = run_actions(&mut [
+                TestAction::Spawn(0),
+                TestAction::Spawn(1),
+                TestAction::Act(Action::MakeInnerTree),
+                TestAction::Spawn(2),
+                TestAction::Act(Action::MakeInnerTree),
+                TestAction::Spawn(3),
+                TestAction::Spawn(4),
+                TestAction::Act(Action::MoveFocus(Direction::Up)),
+            ]);
+            assert_eq!(focus, vec![1, 0]);
+            run_actions_from_state(
+                &mut [TestAction::Act(Action::CloseWindow)],
+                &mut tree,
+                &mut focus,
+            );
+            assert_eq!(focus, vec![1, 0, 0]);
         }
     }
 }

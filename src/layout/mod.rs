@@ -59,12 +59,13 @@ impl Root {
             return;
         };
 
-        let path: Vec<usize> = suggestion.into();
-        let (new_focus, _d) = self.tree.toplevel_destroyed(&path);
+        let mut path: Vec<usize> = suggestion.into();
+        let needs_focus_update = path == self.active_window;
+        let _d = self.tree.toplevel_destroyed(&mut path);
         // If the old window was focused, update the focus.
-        if path == self.active_window {
+        if needs_focus_update {
             self.windows_to_deactivate.push(w);
-            self.active_window = new_focus.into();
+            self.active_window = path;
         }
     }
 
@@ -108,6 +109,7 @@ impl Root {
             self.windows_to_deactivate.push(w);
         }
         self.active_window = p.into();
+        self.tree.apply_focus(&self.active_window);
         self.is_dirty = true;
     }
 
