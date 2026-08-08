@@ -39,8 +39,14 @@ impl Root {
         }
         self.is_dirty = false;
 
-        self.tree
-            .render_to_space_root(Some(&self.active_window), render_data);
+        self.tree.render_to_space_root(
+            if self.active_window.is_empty() {
+                None
+            } else {
+                Some(&self.active_window)
+            },
+            render_data,
+        );
     }
 
     pub fn new_toplevel(&mut self, surface: ToplevelSurface) {
