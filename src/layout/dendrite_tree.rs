@@ -290,9 +290,9 @@ impl<W: RenderableElement> DendriteTree<W> {
                     size: *s,
                 },
                 orientation: if s.w <= s.h {
-                    Orientation::Horizontal
-                } else {
                     Orientation::Vertical
+                } else {
+                    Orientation::Horizontal
                 },
                 is_tabbed: false,
                 last_focus: 0,
@@ -343,7 +343,6 @@ impl<W: RenderableElement> DendriteTree<W> {
             return;
         };
 
-        tracing::warn!("Inserting after {x:?}");
         let new_geometry = Rectangle::new(
             match orientation {
                 Orientation::Vertical => Point::new(
