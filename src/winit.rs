@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 use std::time::Duration;
 
+use smithay::desktop::space::SpaceElement;
 use smithay::wayland::seat::WaylandFocus;
 use smithay::{
     backend::{
@@ -93,7 +94,9 @@ pub fn init_winit(
                             .get_focused_window()
                             .and_then(|w| w.wl_surface())
                             .map(Cow::into_owned);
-                        kbd.set_focus(state, s, SERIAL_COUNTER.next_serial());
+                        if kbd.current_focus().is_none() && !s.is_none() {
+                            kbd.set_focus(state, s, SERIAL_COUNTER.next_serial());
+                        }
                     }
 
                     {

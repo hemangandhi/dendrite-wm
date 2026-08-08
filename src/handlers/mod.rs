@@ -123,6 +123,8 @@ impl WlrLayerShellHandler for DendriteState {
         }
         layer_surface.layer_surface().with_pending_state(|s| {
             let Some(Size { w, h, .. }) = self.space.output_geometry(output).map(|g| g.size) else {
+                tracing::warn!("No output geometry, defaulting to 800x500");
+                s.size = Some(Size::new(800, 500));
                 return;
             };
             s.size = Some(Size::new(w, h));

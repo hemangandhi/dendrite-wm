@@ -130,7 +130,6 @@ impl XdgShellHandler for DendriteState {
     }
 
     fn grab(&mut self, surface: PopupSurface, _seat: wl_seat::WlSeat, serial: Serial) {
-        tracing::info!("Here!");
         let popup = PopupKind::Xdg(surface.clone());
         let Ok(root) = find_popup_root_surface(&popup) else {
             tracing::warn!("Grab: no popup root");
@@ -249,13 +248,20 @@ impl DendriteState {
                 tracing::warn!("No keyboard");
                 return;
             };
-            k.set_focus(self, None, SERIAL_COUNTER.next_serial());
-            k.set_focus(self, Some(popup_surface), SERIAL_COUNTER.next_serial());
+            // Fuzzel apparently needs this check.
+            if k.current_focus()
+                .map(|s| s != popup_surface)
+                .unwrap_or(false)
+            {
+                // k.set_focus(self, None, SERIAL_COUNTER.next_serial());
+                k.set_focus(self, Some(popup_surface), SERIAL_COUNTER.next_serial());
+            }
         }
     }
 
     fn get_popup_surface_to_focus(&self, surface: &WlSurface) -> Option<WlSurface> {
-        let mut map = layer_map_for_output(self.space.outputs().next().unwrap());
+        let output = self.space.outputs().next().unwrap();
+        let mut map = layer_map_for_output(output);
         map.arrange();
         let Some(layer) = map.layer_for_surface(
             surface,
@@ -266,15 +272,28 @@ impl DendriteState {
         if !with_states(surface, |s| {
             s.data_map
                 .get::<LayerSurfaceData>()
+                .and_then(|data| data.lock().ok())
                 .map(|data| {
-                    data.lock()
-                        .map(|data| data.initial_configure_sent)
-                        .unwrap_or(false)
+                    data.initial_configure_sent
+                        && data
+                            .last_acked
+                            .as_ref()
+                            .map(|s| s.size != Some(Size::new(0, 0)))
+                            .unwrap_or(false)
                 })
                 .unwrap_or(false)
         }) {
+            layer.layer_surface().with_pending_state(|s| {
+                let Some(Size { w, h, .. }) = self.space.output_geometry(output).map(|g| g.size)
+                else {
+                    tracing::warn!("No output geometry, defaulting to 800x500");
+                    s.size = Some(Size::new(800, 500));
+                    return;
+                };
+                s.size = Some(Size::new(w, h));
+            });
             layer.layer_surface().send_configure();
-            return None;
+            // return None;
         }
         let state = layer.cached_state();
         if state.keyboard_interactivity == KeyboardInteractivity::Exclusive
