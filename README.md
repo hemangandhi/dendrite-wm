@@ -66,3 +66,14 @@ Then:
 
 - File-system interactions will either be rejected if invalid or actually just manipulate the windows to match the new file structure.
 - Adding the file system into version control could make a WM-level undo or something... possible?
+
+## TODOs
+
+The more active TODOs are, in order of complexity or expected difficulty:
+
+1. [ ] Debug Fuzzel's popup not working.
+2. [ ] Set up XWayland satellite.
+3. [ ] Handle workspaces.
+4. [ ] Handle multiple outputs.
+
+There's definitely stuff to do after this, but I haven't planned those yet.
