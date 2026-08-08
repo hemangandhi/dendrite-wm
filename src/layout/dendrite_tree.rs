@@ -74,16 +74,25 @@ impl<W> From<Size<i32, Logical>> for DendriteTree<W> {
     }
 }
 
+// TODO: reduce out params?
 fn delete_child_and_suggest_focus<W>(
     children: &mut Vec<DendriteTree<W>>,
-    i: usize,
+    index_to_remove: usize,
     new_focus: &mut Vec<usize>,
+    last_focus: &mut usize,
 ) -> bool {
-    children.remove(i);
+    children.remove(index_to_remove);
     if children.is_empty() {
         return true;
     }
-    let index = if i != 0 { i - 1 } else { 0 };
+    let index = if index_to_remove != 0 {
+        index_to_remove - 1
+    } else {
+        0
+    };
+    if *last_focus == index_to_remove {
+        *last_focus = index;
+    }
     new_focus.push(index);
     children[index].deepen_focus_from_last(new_focus);
     return false;
@@ -418,6 +427,7 @@ impl<W: RenderableElement> DendriteTree<W> {
             children,
             orientation,
             is_tabbed,
+            last_focus,
             ..
         } = self
         else {
@@ -432,7 +442,7 @@ impl<W: RenderableElement> DendriteTree<W> {
                 return false;
             }
             focus.truncate(index);
-            return delete_child_and_suggest_focus(children, child_index, focus);
+            return delete_child_and_suggest_focus(children, child_index, focus, last_focus);
         }
 
         let Some(i) = focus.pop() else {
@@ -452,7 +462,7 @@ impl<W: RenderableElement> DendriteTree<W> {
             }
         };
 
-        let new_focus = delete_child_and_suggest_focus(children, i, focus);
+        let new_focus = delete_child_and_suggest_focus(children, i, focus, last_focus);
         if *is_tabbed {
             return new_focus;
         }
@@ -930,12 +940,48 @@ mod test {
                 TestAction::Act(Action::MoveFocus(Direction::Up)),
             ]);
             assert_eq!(focus, vec![1, 0]);
+            let mut rendered = vec![];
             run_actions_from_state(
-                &mut [TestAction::Act(Action::CloseWindow)],
+                &mut [
+                    TestAction::Act(Action::CloseWindow),
+                    TestAction::Render(&mut rendered),
+                ],
                 &mut tree,
                 &mut focus,
             );
             assert_eq!(focus, vec![1, 0, 0]);
+            let expected_render = vec![
+                RenderRecord::Rendered {
+                    id: 0,
+                    coords: Point::new(0, 0),
+                    active: false,
+                    z_index: 29,
+                },
+                RenderRecord::Rendered {
+                    id: 2,
+                    coords: Point::new(128, 0),
+                    active: true,
+                    z_index: 27,
+                },
+                RenderRecord::Rendered {
+                    id: 3,
+                    coords: Point::new(256, 0),
+                    active: false,
+                    z_index: 27,
+                },
+                RenderRecord::Unmapped(4),
+            ];
+            assert_eq!(rendered, expected_render);
+            run_actions_from_state(
+                &mut [
+                    TestAction::Act(Action::CloseWindow),
+                    TestAction::Act(Action::CloseWindow),
+                    TestAction::Act(Action::CloseWindow),
+                ],
+                &mut tree,
+                &mut focus,
+            );
+            assert_eq!(focus, vec![0]);
         }
     }
 }
