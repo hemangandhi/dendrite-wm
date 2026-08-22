@@ -137,5 +137,9 @@ impl WlrLayerShellHandler for DendriteState {
             |_, _| Some(output.clone()),
         );
     }
+
+    fn layer_destroyed(&mut self, _surface: smithay::wayland::shell::wlr_layer::LayerSurface) {
+        self.layout.recover_focus();
+    }
 }
 delegate_layer_shell!(DendriteState);

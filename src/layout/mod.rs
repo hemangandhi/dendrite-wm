@@ -122,4 +122,8 @@ impl Root {
     pub fn resize_output(&mut self, new_size: Size<i32, Logical>) {
         self.tree.resize_output(new_size);
     }
+
+    pub fn recover_focus(&mut self) {
+        self.tree.deepen_focus_from_last(&mut self.active_window);
+    }
 }

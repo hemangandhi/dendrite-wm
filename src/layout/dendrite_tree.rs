@@ -209,7 +209,7 @@ impl<W> DendriteTree<W> {
         }
     }
 
-    fn deepen_focus_from_last(&mut self, focus: &mut Vec<usize>) {
+    pub fn deepen_focus_from_last(&mut self, focus: &mut Vec<usize>) {
         let mut child: &mut DendriteTree<W> = self;
         while let DendriteTree::Container {
             children: grandchildren,
