@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::time::Duration;
 
 use smithay::desktop::space::SpaceElement;
+use smithay::reexports::rustix::time::{ClockId, clock_gettime};
 use smithay::wayland::seat::WaylandFocus;
 use smithay::{
     backend::{
@@ -11,7 +12,7 @@ use smithay::{
         },
         winit::{self, WinitEvent},
     },
-    desktop::Window,
+    desktop::{Window, layer_map_for_output},
     output::{Mode, Output, PhysicalProperties, Subpixel},
     reexports::calloop::EventLoop,
     utils::{Rectangle, SERIAL_COUNTER, Size, Transform},
@@ -127,6 +128,24 @@ pub fn init_winit(
                     }
                     backend.submit(Some(&[damage])).unwrap();
 
+                    {
+                        let output = state.space.outputs().next().unwrap();
+                        let mut map = layer_map_for_output(output);
+                        map.arrange();
+                        let monotonic_time = clock_gettime(ClockId::Monotonic);
+                        let frame_callback_time = Duration::new(
+                            monotonic_time.tv_sec as u64,
+                            monotonic_time.tv_nsec as u32,
+                        );
+                        for layer in map.layers() {
+                            layer.send_frame(
+                                output,
+                                frame_callback_time,
+                                Some(Duration::from_millis(995)),
+                                |_surf, _state| Some(output.clone()),
+                            );
+                        }
+                    }
                     state.space.elements().for_each(|window| {
                         window.send_frame(
                             &output,
