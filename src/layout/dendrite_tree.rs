@@ -664,7 +664,7 @@ mod test {
             assert_eq!(children.len(), 5);
             assert!(children.iter().enumerate().all(|(i, w)| match w {
                 DendriteTree::Leaf { window, .. } =>
-                    window.id == ((i + 1) as u32) && window.size == Size::new(128, 256),
+                    window.id == ((i + 1) as u32) && window.size == Size::new(256, 128),
                 _ => false,
             }));
         }
@@ -680,7 +680,7 @@ mod test {
             // Needs focus to actually be set.
             focus.push(0);
             for i in 1..5 {
-                tree.handle_move_focus(&mut focus, 0, Direction::Right);
+                tree.handle_move_focus(&mut focus, 0, Direction::Down);
                 assert_eq!(focus, vec![i]);
             }
         }
@@ -710,18 +710,18 @@ mod test {
                 if focus.is_empty() {
                     focus.push(0);
                 } else {
-                    tree.handle_move_focus(&mut focus, 0, Direction::Right);
+                    tree.handle_move_focus(&mut focus, 0, Direction::Down);
                     assert_eq!(focus, vec![(i - 1) as usize]);
                 }
             }
             for i in 1..5 {
-                tree.handle_move_focus(&mut focus, 0, Direction::Left);
+                tree.handle_move_focus(&mut focus, 0, Direction::Up);
                 assert_eq!(focus, vec![(4 - i) as usize]);
             }
             let mut renders: Vec<Vec<RenderRecord>> = vec![];
             for i in 1..5 {
                 tree.render_to_space_root(Some(&focus), renders.push_mut(vec![]));
-                tree.handle_move_focus(&mut focus, 0, Direction::Right);
+                tree.handle_move_focus(&mut focus, 0, Direction::Down);
                 assert_eq!(focus, vec![i]);
             }
             let expected_renders = vec![
@@ -734,13 +734,13 @@ mod test {
                     },
                     RenderRecord::Rendered {
                         id: 2,
-                        coords: Point::new(128, 0),
+                        coords: Point::new(0, 128),
                         active: false,
                         z_index: 29,
                     },
                     RenderRecord::Rendered {
                         id: 3,
-                        coords: Point::new(256, 0),
+                        coords: Point::new(0, 256),
                         active: false,
                         z_index: 29,
                     },
@@ -756,13 +756,13 @@ mod test {
                     },
                     RenderRecord::Rendered {
                         id: 2,
-                        coords: Point::new(128, 0),
+                        coords: Point::new(0, 128),
                         active: true,
                         z_index: 29,
                     },
                     RenderRecord::Rendered {
                         id: 3,
-                        coords: Point::new(256, 0),
+                        coords: Point::new(0, 256),
                         active: false,
                         z_index: 29,
                     },
@@ -772,7 +772,7 @@ mod test {
                 vec![
                     RenderRecord::Rendered {
                         id: 1,
-                        coords: Point::new(-128, 0),
+                        coords: Point::new(0, -128),
                         active: false,
                         z_index: 29,
                     },
@@ -784,13 +784,13 @@ mod test {
                     },
                     RenderRecord::Rendered {
                         id: 3,
-                        coords: Point::new(128, 0),
+                        coords: Point::new(0, 128),
                         active: true,
                         z_index: 29,
                     },
                     RenderRecord::Rendered {
                         id: 4,
-                        coords: Point::new(256, 0),
+                        coords: Point::new(0, 256),
                         active: false,
                         z_index: 29,
                     },
@@ -800,7 +800,7 @@ mod test {
                     RenderRecord::Unmapped(1),
                     RenderRecord::Rendered {
                         id: 2,
-                        coords: Point::new(-128, 0),
+                        coords: Point::new(0, -128),
                         active: false,
                         z_index: 29,
                     },
@@ -812,13 +812,13 @@ mod test {
                     },
                     RenderRecord::Rendered {
                         id: 4,
-                        coords: Point::new(128, 0),
+                        coords: Point::new(0, 128),
                         active: true,
                         z_index: 29,
                     },
                     RenderRecord::Rendered {
                         id: 5,
-                        coords: Point::new(256, 0),
+                        coords: Point::new(0, 256),
                         active: false,
                         z_index: 29,
                     },
@@ -900,13 +900,13 @@ mod test {
                 },
                 RenderRecord::Rendered {
                     id: 1,
-                    coords: Point::new(128, -128),
+                    coords: Point::new(-128, 128),
                     active: false,
                     z_index: 28,
                 },
                 RenderRecord::Rendered {
                     id: 2,
-                    coords: Point::new(0, 128),
+                    coords: Point::new(128, 0),
                     active: false,
                     z_index: 27,
                 },
@@ -918,7 +918,7 @@ mod test {
                 },
                 RenderRecord::Rendered {
                     id: 4,
-                    coords: Point::new(128 + 64, 128),
+                    coords: Point::new(128, 128 + 64),
                     active: true,
                     z_index: 27,
                 },
@@ -936,7 +936,7 @@ mod test {
                 TestAction::Act(Action::MakeInnerTree),
                 TestAction::Spawn(3),
                 TestAction::Spawn(4),
-                TestAction::Act(Action::MoveFocus(Direction::Up)),
+                TestAction::Act(Action::MoveFocus(Direction::Left)),
             ]);
             assert_eq!(focus, vec![1, 0]);
             let mut rendered = vec![];
@@ -958,13 +958,13 @@ mod test {
                 },
                 RenderRecord::Rendered {
                     id: 2,
-                    coords: Point::new(128, 0),
+                    coords: Point::new(0, 128),
                     active: true,
                     z_index: 27,
                 },
                 RenderRecord::Rendered {
                     id: 3,
-                    coords: Point::new(256, 0),
+                    coords: Point::new(0, 256),
                     active: false,
                     z_index: 27,
                 },
