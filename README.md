@@ -2,7 +2,7 @@
 
 A [smithay](https://github.com/Smithay/smithay)-based WM inspired by [niri](https://github.com/niri-wm/niri).
 
-The name is somewhat inspired by fractals and trees because I'm essentially taking the idea of niri and adding a tree structure, like i3's.
+The name is somewhat inspired by fractals and trees because I'm essentially taking the idea of niri and adding a tree structure, like [i3](https://i3wm.org/)'s.
 
 For now, I'm going to waffle on about these dreams, but eventually this should be some brief user guide.
 
@@ -35,6 +35,8 @@ enum Tree{
 - The sizing will be relative to the output's size.
 - Containers will have a frame with the same size as a sibling window.
 - Child windows that don't fit into their containers scroll off on the relevant axis.
+
+(The above is definitely not a full specification, and barring some compromises, it, uh... works as implemented.)
 
 ## Side-quests
 
@@ -71,9 +73,24 @@ Then:
 
 The more active TODOs are, in order of complexity or expected difficulty:
 
-1. [ ] Debug Fuzzel's popup not working.
+1. [x] Debug Fuzzel's popup not working.
+    1. Note: there might be some race condition with the keyboard focus.
 2. [ ] Set up XWayland satellite.
-3. [ ] Handle workspaces.
-4. [ ] Handle multiple outputs.
+    1. [x] Support XWayland satellite itself
+    2. [ ] (Maybe?) Spawn XWayland satellite on startup.
+3. [ ] Support resizing and moving windows around.
+4. [ ] Handle workspaces.
+5. [ ] Handle multiple outputs.
 
 There's definitely stuff to do after this, but I haven't planned those yet.
+I'm vaguely aware that I ought to:
+
+1. Test more. (+ me actually using this for real)
+2. Figure out an IPC. (Particularly since multi-output support will probably force me.)
+3. Figure out some sort of config file.
+    1. Also, if I do this, I should figure out what things I actually want to let people configure.
+        1. Opactiy?
+        2. Focus rings (like niri)?
+    2. Also how much of what _I_ need is just "spawn at startup" kinda stuff.
+4. Determine if I want tabbed or floating windows at all. (The point being: if I have this fractal tree thing, is there a reason to have tabs or floating windows.)
+5. Implement that global search thingy?
