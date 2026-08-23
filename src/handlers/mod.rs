@@ -27,7 +27,7 @@ use smithay::wayland::xdg_activation::{
 };
 use smithay::{
     delegate_data_device, delegate_layer_shell, delegate_output, delegate_seat,
-    delegate_xdg_activation,
+    delegate_viewporter, delegate_xdg_activation,
 };
 
 impl SeatHandler for DendriteState {
@@ -143,3 +143,7 @@ impl WlrLayerShellHandler for DendriteState {
     }
 }
 delegate_layer_shell!(DendriteState);
+
+// NOTE: may need to update to use `delegate_dispatch2` later on.
+// https://github.com/Smithay/smithay/commit/0d14cd655f6e905ad5110ff0384400da223f2cab
+delegate_viewporter!(DendriteState);

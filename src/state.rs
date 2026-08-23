@@ -19,6 +19,7 @@ use smithay::{
         shell::{wlr_layer::WlrLayerShellState, xdg::XdgShellState},
         shm::ShmState,
         socket::ListeningSocketSource,
+        viewporter::ViewporterState,
         xdg_activation::XdgActivationState,
     },
 };
@@ -44,6 +45,7 @@ pub struct DendriteState {
     pub seat_state: SeatState<DendriteState>,
     pub data_device_state: DataDeviceState,
     pub popups: PopupManager,
+    pub viewporter_state: ViewporterState,
 
     pub seat: Seat<Self>,
 
@@ -88,6 +90,7 @@ impl DendriteState {
         // Get the loop signal, used to stop the event loop
         let loop_signal = event_loop.get_signal();
         let xdg_activation_state = XdgActivationState::new::<DendriteState>(&dh);
+        let viewporter_state = ViewporterState::new::<DendriteState>(&dh);
 
         Self {
             start_time,
@@ -107,6 +110,7 @@ impl DendriteState {
             popups,
             seat,
             xdg_activation_state,
+            viewporter_state,
             layout: Root::default(),
         }
     }
