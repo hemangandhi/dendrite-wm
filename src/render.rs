@@ -70,6 +70,8 @@ pub trait RenderableElement {
     fn from_toplevel(size: Size<i32, Logical>, t: Self::TopLevelSurfaceType) -> Self;
 
     fn to_surface(&self) -> Option<Self::SurfaceType>;
+
+    fn set_size(&mut self, size: Size<i32, Logical>);
 }
 
 impl RenderableElement for Window {
@@ -123,6 +125,15 @@ impl RenderableElement for Window {
 
     fn to_surface(&self) -> Option<Self::SurfaceType> {
         self.wl_surface().map(move |c| (*c).clone())
+    }
+
+    fn set_size(&mut self, size: Size<i32, Logical>) {
+        let Some(tl) = self.toplevel() else {
+            tracing::warn!("Couldn't get toplevel for window");
+            return;
+        };
+        tl.with_pending_state(|s| s.size = Some(size));
+        tl.send_configure();
     }
 }
 
@@ -200,6 +211,10 @@ pub mod test_render {
 
         fn to_surface(&self) -> Option<Self::SurfaceType> {
             Some(self.clone())
+        }
+
+        fn set_size(&mut self, size: Size<i32, Logical>) {
+            self.size = size;
         }
     }
 }
