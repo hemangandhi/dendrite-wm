@@ -487,7 +487,7 @@ impl<W: RenderableElement> DendriteTree<W> {
         focus: &mut Vec<usize>,
         index: usize,
         mut direction: Direction,
-    ) -> Option<(Direction, Point<i32, Logical>)> {
+    ) -> Option<Direction> {
         let DendriteTree::Container {
             children,
             orientation,
@@ -507,27 +507,25 @@ impl<W: RenderableElement> DendriteTree<W> {
             return None;
         }
 
-        let mut suggested_point = geometry.loc;
         let mut moved_up = false;
         if index < focus.len() - 1 {
-            let Some((residual_action, inner_suggested_point)) =
+            let Some(residual_action) =
                 children[focus[index]].handle_move_focus(focus, index + 1, direction)
             else {
                 return None;
             };
             direction = residual_action;
-            suggested_point = inner_suggested_point;
             moved_up = true;
         }
 
         let child_index_offset: isize = match (direction, *orientation) {
             (Direction::Up | Direction::Down, Orientation::Horizontal) => {
-                return Some((direction, suggested_point));
+                return Some(direction);
             }
             (Direction::Up, Orientation::Vertical) => -1,
             (Direction::Down, Orientation::Vertical) => 1,
             (Direction::Left | Direction::Right, Orientation::Vertical) => {
-                return Some((direction, suggested_point));
+                return Some(direction);
             }
             (Direction::Left, Orientation::Horizontal) => -1,
             (Direction::Right, Orientation::Horizontal) => 1,
@@ -535,7 +533,7 @@ impl<W: RenderableElement> DendriteTree<W> {
 
         let new_child_index = (focus[index] as isize) + child_index_offset;
         if new_child_index < 0 || new_child_index >= (children.len() as isize) {
-            return Some((direction, suggested_point));
+            return Some(direction);
         }
 
         if moved_up {
@@ -605,7 +603,7 @@ impl<W: RenderableElement> DendriteTree<W> {
             | Action::MoveFocus(d @ Direction::Left)
             | Action::MoveFocus(d @ Direction::Right) => self
                 .handle_move_focus(focus, 0, d)
-                .map(|(d, _i)| Action::MoveFocus(d)),
+                .map(|d| Action::MoveFocus(d)),
             Action::MakeInnerTree => {
                 self.make_inner_tree(focus, 0);
                 None
