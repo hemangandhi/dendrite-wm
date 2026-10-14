@@ -698,19 +698,19 @@ impl<W: RenderableElement> DendriteTree<W> {
             (Direction::Right, Orientation::Horizontal) => 1,
         };
 
-        let mut new_child_index = (*focus.last().unwrap() as isize) + child_index_offset;
-        if new_child_index < 0 {
-            new_child_index = 0;
-        } else if new_child_index > (children.len() as isize) {
-            new_child_index = children.len() as isize;
-        }
-
-        let (children, geometry, orientation, is_tabbed, last_focus) = if moved_up {
+        let (children, geometry, orientation, is_tabbed, last_focus, extend_focus) = if moved_up {
             focus.truncate(index + 1);
-            (children, geometry, orientation, is_tabbed, last_focus)
+            (
+                children,
+                geometry,
+                orientation,
+                is_tabbed,
+                last_focus,
+                false,
+            )
         } else if matches!(
-            children[new_child_index as usize],
-            DendriteTree::Container { .. }
+            children.get(focus.last().cloned().unwrap_or(0).max(children.len() - 1)),
+            Some(&DendriteTree::Container::<W> { .. })
         ) {
             let DendriteTree::Container {
                 children: new_children,
@@ -731,13 +731,32 @@ impl<W: RenderableElement> DendriteTree<W> {
                 new_orientation,
                 new_is_tabbed,
                 new_last_focus,
+                true,
             )
         } else {
-            (children, geometry, orientation, is_tabbed, last_focus)
+            (
+                children,
+                geometry,
+                orientation,
+                is_tabbed,
+                last_focus,
+                false,
+            )
         };
 
-        focus[index] = new_child_index as usize;
+        let mut new_child_index = (*focus.last().unwrap() as isize) + child_index_offset;
+        if new_child_index < 0 {
+            new_child_index = 0;
+        } else if new_child_index > (children.len() as isize) {
+            new_child_index = children.len() as isize;
+        }
+
         *last_focus = new_child_index as usize;
+        if extend_focus {
+            focus.push(new_child_index as usize);
+        } else {
+            focus[index] = new_child_index as usize;
+        }
 
         add_toplevel_into_container(
             *is_tabbed,
@@ -745,7 +764,7 @@ impl<W: RenderableElement> DendriteTree<W> {
             children,
             *geometry,
             *orientation,
-            Some(focus[index]),
+            Some(new_child_index as usize),
         );
         return None;
     }
@@ -1326,6 +1345,65 @@ mod test {
                         active: true,
                         z_index: 28,
                     },
+                ]
+            );
+        }
+
+        #[test]
+        fn test_move_down() {
+            let mut render_before = vec![];
+            let mut render_after = vec![];
+            let (_tree, focus) = run_actions(&mut [
+                TestAction::Spawn(0),
+                TestAction::Spawn(1),
+                TestAction::Act(Action::MakeInnerTree),
+                TestAction::Spawn(2),
+                TestAction::Act(Action::MoveFocus(Direction::Up)),
+                TestAction::Render(&mut render_before),
+                TestAction::Act(Action::MoveNode(Direction::Down)),
+                TestAction::Render(&mut render_after),
+            ]);
+
+            assert_eq!(focus, vec![0, 1]);
+            assert_eq!(
+                render_before,
+                vec![
+                    RenderRecord::Rendered {
+                        id: 0,
+                        coords: Point::new(0, 0),
+                        active: true,
+                        z_index: 29,
+                    },
+                    RenderRecord::Rendered {
+                        id: 1,
+                        coords: Point::new(-128, 128),
+                        active: false,
+                        z_index: 28,
+                    },
+                    RenderRecord::Rendered {
+                        id: 2,
+                        coords: Point::new(128, 128),
+                        active: false,
+                        z_index: 28,
+                    },
+                ]
+            );
+            assert_eq!(
+                render_after,
+                vec![
+                    RenderRecord::Rendered {
+                        id: 1,
+                        coords: Point::new(-128, 0),
+                        active: false,
+                        z_index: 28,
+                    },
+                    RenderRecord::Rendered {
+                        id: 0,
+                        coords: Point::new(128, 0),
+                        active: true,
+                        z_index: 28,
+                    },
+                    RenderRecord::Unmapped(2),
                 ]
             );
         }
