@@ -184,6 +184,10 @@ fn deepen_focus_from_last_container<'b, W>(
             ..
         } = &mut *child
         {
+            if *last_focus >= children.len() {
+                tracing::warn!("Resetting out-of-bounds focus {last_focus} under {focus:?}");
+                *last_focus = 0;
+            }
             scroll_window_into_view(
                 children[*last_focus].geometry(),
                 *orientation,
@@ -525,6 +529,11 @@ impl<W: RenderableElement> DendriteTree<W> {
             return false;
         };
 
+        if focus.is_empty() {
+            tracing::warn!("no toplevel is focussed for destruction");
+            return false;
+        }
+
         if index < focus.len() - 1 {
             let child_index = focus[index];
             let delete_child = children[child_index].toplevel_destroyed_helper(focus, index + 1);
@@ -665,6 +674,13 @@ impl<W: RenderableElement> DendriteTree<W> {
             inner_migrant
         } else {
             let removed = children.remove(focus[index]);
+            if *last_focus == index {
+                if index == 0 {
+                    *last_focus = 0;
+                } else {
+                    *last_focus = index - 1;
+                }
+            }
             offset_for_removed(children, focus[index], *orientation, removed.geometry());
             removed
         };
@@ -1312,6 +1328,26 @@ mod test {
                     },
                 ]
             );
+        }
+
+        #[test]
+        fn test_move_node_then_focus() {
+            let mut render_before = vec![];
+            let mut render_after = vec![];
+            let (_tree, focus) = run_actions(&mut [
+                TestAction::Spawn(0),
+                TestAction::Spawn(1),
+                TestAction::Act(Action::MakeInnerTree),
+                TestAction::Spawn(2),
+                TestAction::Act(Action::MakeInnerTree),
+                TestAction::Spawn(3),
+                TestAction::Spawn(4),
+                TestAction::Render(&mut render_before),
+                TestAction::Act(Action::MoveNode(Direction::Right)),
+                TestAction::Render(&mut render_after),
+                TestAction::Act(Action::MoveFocus(Direction::Left)),
+            ]);
+            assert_eq!(focus, [1, 1, 0]);
         }
     }
 }
