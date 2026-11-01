@@ -1409,6 +1409,116 @@ mod test {
         }
 
         #[test]
+        fn test_move_exchange_containers() {
+            let mut render_before = vec![];
+            let mut render_during = vec![];
+            let mut render_after = vec![];
+            let (_tree, focus) = run_actions(&mut [
+                TestAction::Spawn(0),
+                TestAction::Spawn(1),
+                TestAction::Act(Action::MakeInnerTree),
+                TestAction::Spawn(2),
+                TestAction::Act(Action::MoveFocus(Direction::Up)),
+                TestAction::Act(Action::MakeInnerTree),
+                TestAction::Spawn(3),
+                TestAction::Render(&mut render_before),
+                TestAction::Act(Action::MoveNode(Direction::Down)),
+                TestAction::Render(&mut render_during),
+                TestAction::Act(Action::MoveNode(Direction::Down)),
+                TestAction::Render(&mut render_after),
+            ]);
+
+            assert_eq!(focus, vec![1, 2]);
+            assert_eq!(
+                render_before,
+                vec![
+                    RenderRecord::Rendered {
+                        id: 0,
+                        coords: Point::new(-128, 0),
+                        active: false,
+                        z_index: 28,
+                    },
+                    RenderRecord::Rendered {
+                        id: 3,
+                        coords: Point::new(128, 0),
+                        active: true,
+                        z_index: 28,
+                    },
+                    RenderRecord::Rendered {
+                        id: 1,
+                        coords: Point::new(-128, 128),
+                        active: false,
+                        z_index: 28,
+                    },
+                    RenderRecord::Rendered {
+                        id: 2,
+                        coords: Point::new(128, 128),
+                        active: false,
+                        z_index: 28,
+                    },
+                ]
+            );
+            assert_eq!(
+                render_during,
+                vec![
+                    RenderRecord::Rendered {
+                        id: 0,
+                        coords: Point::new(-128, 0),
+                        active: false,
+                        z_index: 28,
+                    },
+                    RenderRecord::Rendered {
+                        id: 3,
+                        coords: Point::new(0, 128),
+                        active: true,
+                        z_index: 29,
+                    },
+                    RenderRecord::Rendered {
+                        id: 1,
+                        coords: Point::new(-128, 256),
+                        active: false,
+                        z_index: 28,
+                    },
+                    RenderRecord::Rendered {
+                        id: 2,
+                        coords: Point::new(128, 256),
+                        active: false,
+                        z_index: 28,
+                    },
+                ]
+            );
+            assert_eq!(
+                render_after,
+                vec![
+                    RenderRecord::Rendered {
+                        id: 0,
+                        coords: Point::new(-128, 0),
+                        active: false,
+                        z_index: 28,
+                    },
+                    RenderRecord::Rendered {
+                        id: 1,
+                        coords: Point::new(-256, 128),
+                        active: false,
+                        z_index: 28,
+                    },
+                    RenderRecord::Rendered {
+                        id: 2,
+                        coords: Point::new(0, 128),
+                        active: false,
+                        z_index: 28,
+                    },
+                    RenderRecord::Rendered {
+                        id: 3,
+                        coords: Point::new(128, 128),
+                        active: true,
+                        z_index: 28,
+                    },
+                ]
+            );
+        }
+
+        #[test]
         fn test_move_node_then_focus() {
             let mut render_before = vec![];
             let mut render_after = vec![];
